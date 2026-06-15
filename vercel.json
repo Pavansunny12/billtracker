@@ -18,6 +18,7 @@
   ],
   "builds": [
     { "src": "api/extract_pdf.py", "use": "@vercel/python" },
+    { "src": "api/state.py", "use": "@vercel/python" },
     { "src": "*.html", "use": "@vercel/static" },
     { "src": "*.js", "use": "@vercel/static" },
     { "src": "*.css", "use": "@vercel/static" },
@@ -26,6 +27,7 @@
   ],
   "routes": [
     { "src": "/api/extract_pdf", "dest": "api/extract_pdf.py" },
+    { "src": "/api/state", "dest": "api/state.py" },
     { "handle": "filesystem" }
   ]
 }
