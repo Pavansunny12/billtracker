@@ -397,6 +397,12 @@ h3 {
   background: linear-gradient(120deg, #ffffff, var(--green-soft));
 }
 
+.member-card.is-excluded {
+  border-left: 4px solid var(--muted);
+  background: rgba(255, 255, 255, 0.55);
+  opacity: 0.85;
+}
+
 .member-top {
   align-items: flex-start;
 }

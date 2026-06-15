@@ -1,7 +1,24 @@
 const STORAGE_KEY = "bill-collect-v1";
 const ringLength = 302;
 
-const starterMembers = [];
+const starterMembers = [
+  { name: "Pavan Gonuguntla", phone: "3096609539", due: 35.92, excluded: true, attName: "Pavan Gonuguntla" },
+  { name: "Revanth Gonuguntla", phone: "5133831240", due: 37.71, excluded: true, attName: "Revanth Gonuguntla" },
+  { name: "Manasa Uppala", phone: "2247136809", due: 26.70, attName: "Manasa Uppala" },
+  { name: "Hanumanth Kuchi", phone: "4254948785", due: 50.48, attName: "New Line" },
+  { name: "Tarak Ram", phone: "4695454680", due: 59.08, attName: "Tarak Ram" },
+  { name: "Akhilesh Gourigari", phone: "5135936686", due: 34.20, attName: "Akhilesh Gourigari" },
+  { name: "Deepak Chada", phone: "8168599656", due: 66.02, attName: "Deepak Chada" },
+  { name: "Uday Yarlagadda", phone: "9379008382", due: 32.24, attName: "Uday Yarlagadda" },
+  { name: "Praneetha Chowdary", phone: "9379299558", due: 30.02, attName: "ATT Customer" },
+  { name: "Sindhu", phone: "2057570180", due: 35.59, attName: "Indhu G." },
+  { name: "Nithin Ravuri", phone: "2109865735", due: 33.21, attName: "Nithin Ravuri" },
+  { name: "Joshua Ebenezer", phone: "2672798757", due: 49.85, attName: "Joshua Ebenezer" },
+  { name: "Roshan Ambati", phone: "5132008454", due: 40.98, attName: "Roshan Ambati" },
+  { name: "Krishnakoushik Paisa", phone: "5132230636", due: 40.98, attName: "Krishnakoushik Paisa" },
+  { name: "Bunty", phone: "5139684224", due: 40.98, attName: "Ajay Mannam" },
+  { name: "Areef AT&T", phone: "6602385180", due: 71.33, attName: "Ashutosh Agnihotri" }
+];
 
 const canonicalNamesByPhone = {};
 
@@ -23,12 +40,12 @@ const els = {
   progressCircle: document.querySelector("#progressCircle"),
   progressValue: document.querySelector("#progressValue"),
   totalBill: document.querySelector("#totalBill"),
-  totalCollected: document.querySelector("#totalCollected"),
-  pendingCount: document.querySelector("#pendingCount"),
+  ownerPaidAmount: document.querySelector("#ownerPaidAmount"),
+  collectibleAmount: document.querySelector("#collectibleAmount"),
   workflowMonth: document.querySelector("#workflowMonth"),
-  workflowMembers: document.querySelector("#workflowMembers"),
-  workflowPending: document.querySelector("#workflowPending"),
-  workflowStatus: document.querySelector("#workflowStatus"),
+  workflowCollected: document.querySelector("#workflowCollected"),
+  workflowPaidCount: document.querySelector("#workflowPaidCount"),
+  workflowPendingCount: document.querySelector("#workflowPendingCount"),
   unpaidOnlyInput: document.querySelector("#unpaidOnlyInput"),
   addMemberButton: document.querySelector("#addMemberButton"),
   exportMonthButton: document.querySelector("#exportMonthButton"),
@@ -98,25 +115,31 @@ function monthLabel(date = new Date()) {
 
 function createMember(member) {
   const digits = last10Digits(member.phone);
+  let name = canonicalNamesByPhone[digits] || member.name;
+  if (name) name = resolveCanonicalName(name);
   return {
     id: makeId(),
-    name: canonicalNamesByPhone[digits] || member.name,
+    name: name,
     phone: member.phone,
     due: Number(member.due || 0),
-    paid: false,
-    received: 0,
-    datePaid: "",
-    method: "",
-    notes: "",
-    reminderSent: false
+    paid: Boolean(member.paid),
+    received: Number(member.received || 0),
+    datePaid: member.datePaid || "",
+    method: member.method || "",
+    notes: member.notes || "",
+    reminderSent: Boolean(member.reminderSent),
+    excluded: Boolean(member.excluded),
+    attName: member.attName || ""
   };
 }
 
 function normalizeMember(member) {
   const digits = last10Digits(member.phone);
+  let name = canonicalNamesByPhone[digits] || member.name || "Unnamed";
+  if (name) name = resolveCanonicalName(name);
   return {
     id: member.id || makeId(),
-    name: canonicalNamesByPhone[digits] || member.name || "Unnamed",
+    name: name,
     phone: member.phone || "",
     due: Math.max(Number(member.due || 0), 0),
     paid: Boolean(member.paid),
@@ -124,7 +147,9 @@ function normalizeMember(member) {
     datePaid: member.datePaid || "",
     method: member.method || "",
     notes: member.notes || "",
-    reminderSent: Boolean(member.reminderSent)
+    reminderSent: Boolean(member.reminderSent),
+    excluded: Boolean(member.excluded),
+    attName: member.attName || ""
   };
 }
 
@@ -238,16 +263,21 @@ function activeMonth() {
 
 function totals(month = activeMonth()) {
   const totalDue = month.members.reduce((sum, member) => sum + Number(member.due || 0), 0);
-  const collected = month.members.reduce((sum, member) => sum + Number(member.received || 0), 0);
-  const paid = month.members.filter((member) => member.paid).length;
-  const pending = month.members.length - paid;
+  const ownerPaid = month.members.filter(m => m.excluded).reduce((sum, member) => sum + Number(member.due || 0), 0);
+  const collectible = Math.max(totalDue - ownerPaid, 0);
+  const collected = month.members.filter(m => !m.excluded).reduce((sum, member) => sum + Number(member.received || 0), 0);
+  const trackedMembers = month.members.filter(m => !m.excluded);
+  const paid = trackedMembers.filter((member) => member.paid).length;
+  const pending = trackedMembers.length - paid;
   return {
     totalDue,
+    ownerPaid,
+    collectible,
     collected,
-    remaining: Math.max(totalDue - collected, 0),
+    remaining: Math.max(collectible - collected, 0),
     paid,
     pending,
-    percent: month.members.length ? Math.round((paid / month.members.length) * 100) : 0
+    percent: trackedMembers.length ? Math.round((paid / trackedMembers.length) * 100) : 0
   };
 }
 
@@ -275,27 +305,23 @@ function renderMonthSelect() {
 function renderSummary() {
   const month = activeMonth();
   const total = totals(month);
+  const trackedMembers = month.members.filter((member) => !member.excluded);
   els.remainingAmount.textContent = money(total.remaining);
-  els.progressText.textContent = `${total.paid} of ${month.members.length} paid`;
+  els.progressText.textContent = `${total.paid} of ${trackedMembers.length} paid`;
   els.progressCircle.style.strokeDashoffset = String(ringLength - ringLength * (total.percent / 100));
   els.progressValue.textContent = `${total.percent}%`;
   els.totalBill.textContent = money(total.totalDue);
-  els.totalCollected.textContent = money(total.collected);
-  els.pendingCount.textContent = total.pending;
+  els.ownerPaidAmount.textContent = money(total.ownerPaid);
+  els.collectibleAmount.textContent = money(total.collectible);
 }
 
 function renderWorkflow() {
   const month = activeMonth();
   const total = totals(month);
-  const membersWithAmounts = month.members.filter((member) => Number(member.due || 0) > 0).length;
   els.workflowMonth.textContent = month.label;
-  els.workflowMembers.textContent = `${membersWithAmounts}/${month.members.length}`;
-  els.workflowPending.textContent = money(total.remaining);
-  els.workflowStatus.textContent = total.pending === 0
-    ? "Closed"
-    : total.collected > 0
-      ? "Collecting"
-      : "Open";
+  els.workflowCollected.textContent = money(total.collected);
+  els.workflowPaidCount.textContent = total.paid;
+  els.workflowPendingCount.textContent = total.pending;
 }
 
 function renderMembers() {
@@ -308,6 +334,7 @@ function renderMembers() {
   visibleMembers.forEach((member) => {
     const node = els.memberTemplate.content.firstElementChild.cloneNode(true);
     node.classList.toggle("is-paid", member.paid);
+    node.classList.toggle("is-excluded", member.excluded);
     node.querySelector("h3").textContent = member.name;
     node.querySelector("p").textContent = member.phone;
     node.querySelector(".amount-due").textContent = money(member.due);
@@ -342,6 +369,17 @@ function renderMembers() {
 
     node.querySelector(".edit-member-button").addEventListener("click", () => editMember(member.id));
     node.querySelector(".remove-member-button").addEventListener("click", () => removeMember(member.id));
+
+    if (member.excluded) {
+      checkButton.style.display = "none";
+      dueInput.readOnly = true;
+      receivedInput.disabled = true;
+      dateInput.disabled = true;
+      methodInput.disabled = true;
+      reminderInput.disabled = true;
+      const reminderRow = node.querySelector(".reminder-row");
+      if (reminderRow) reminderRow.style.display = "none";
+    }
 
     els.memberList.appendChild(node);
   });
@@ -498,7 +536,7 @@ function renderHistory() {
 }
 
 function renderPending() {
-  const pendingMembers = activeMonth().members.filter((member) => !member.paid);
+  const pendingMembers = activeMonth().members.filter((member) => !member.paid && !member.excluded);
   els.pendingList.innerHTML = "";
   pendingMembers.forEach((member) => {
     const row = document.createElement("article");
@@ -522,6 +560,7 @@ function renderMessage() {
   const month = activeMonth();
   const total = totals(month);
   const pendingMembers = month.members
+    .filter((member) => !member.excluded)
     .map((member) => ({
       ...member,
       pendingAmount: Math.max(Number(member.due || 0) - Number(member.received || 0), 0)
@@ -530,7 +569,7 @@ function renderMessage() {
   const lines = [
     `Hi everyone, ${month.label} AT&T bill is ready.`,
     "",
-    `Total bill: ${money(total.totalDue)} | Collected: ${money(total.collected)} | Remaining: ${money(total.remaining)}`,
+    `Total bill: ${money(total.totalDue)} | Collectible: ${money(total.collectible)} | Collected: ${money(total.collected)} | Remaining: ${money(total.remaining)}`,
     ""
   ];
 
@@ -725,6 +764,27 @@ function last10Digits(value) {
   return digits.length >= 10 ? digits.slice(-10) : digits;
 }
 
+function resolveCanonicalName(attName) {
+  if (!attName) return "";
+  const cleaned = attName.trim().replace(/\s+/g, ' ');
+  const lower = cleaned.toLowerCase();
+  
+  if (lower === "new line") return "Hanumanth Kuchi";
+  if (lower === "att customer") return "Praneetha Chowdary";
+  if (lower === "indhu g.") return "Sindhu";
+  if (lower === "ajay mannam") return "Bunty";
+  if (lower === "ashutosh agnihotri") return "Areef AT&T";
+  
+  // Fuzzy matching or case insensitive exact match of the keys
+  if (lower.includes("new line")) return "Hanumanth Kuchi";
+  if (lower.includes("att customer")) return "Praneetha Chowdary";
+  if (lower.includes("indhu g")) return "Sindhu";
+  if (lower.includes("ajay mann")) return "Bunty";
+  if (lower.includes("ashutosh")) return "Areef AT&T";
+  
+  return cleaned;
+}
+
 function phonePattern(digits) {
   const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
   return `${last10.slice(0, 3)}[.\\-\\s]?${last10.slice(3, 6)}[.\\-\\s]?${last10.slice(6)}`;
@@ -764,7 +824,13 @@ function scanBillText() {
     const existing = activeMonth().members.find(m => last10Digits(m.phone) === key);
     if (!existing) {
       const formattedPhone = `(${key.slice(0, 3)}) ${key.slice(3, 6)}-${key.slice(6)}`;
-      const name = canonicalNamesByPhone[key] || `Line ${key}`;
+      let name = canonicalNamesByPhone[key];
+      if (!name && val.name) {
+        name = resolveCanonicalName(val.name);
+      }
+      if (!name) {
+        name = `Line ${key}`;
+      }
       const member = createMember({
         name,
         phone: formattedPhone,
