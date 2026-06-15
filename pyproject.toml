@@ -1,2 +1,10 @@
+[project]
+name = "billtracker"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "pypdf==6.4.1"
+]
+
 [tool.vercel]
 entrypoint = "api.extract_pdf:handler"
