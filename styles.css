@@ -181,8 +181,8 @@ body::after {
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 .topbar-right select:focus {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
   background: #ffffff;
 }
 
@@ -209,23 +209,13 @@ button {
   color: var(--ink);
   backdrop-filter: blur(15px) saturate(120%);
   -webkit-backdrop-filter: blur(15px) saturate(120%);
-  filter: url(#liquid-glass-filter);
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5), 0 4px 12px rgba(31, 38, 135, 0.03);
-  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
-  will-change: transform;
+  transition: all 0.2s ease;
 }
 .icon-button:hover {
   border-color: rgba(255, 255, 255, 0.95);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.25) 45%, rgba(255, 255, 255, 0.05) 46%, rgba(255, 255, 255, 0.2) 100%);
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 
-    1.5px 0 rgba(239, 68, 68, 0.15), 
-    -1.5px 0 rgba(59, 130, 246, 0.15), 
-    inset 0 1px 1.5px rgba(255, 255, 255, 0.75), 
-    0 8px 20px rgba(0, 0, 0, 0.05);
-}
-.icon-button:active {
-  transform: translateY(0) scale(1);
+  box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.75), 0 8px 20px rgba(0, 0, 0, 0.05);
 }
 .icon-button svg {
   width: 20px;
@@ -240,33 +230,23 @@ button {
 .text-button {
   min-height: 44px;
   padding: 0 20px;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.24) 0%, rgba(16, 185, 129, 0.08) 45%, rgba(255, 255, 255, 0) 46%, rgba(16, 185, 129, 0.12) 100%);
-  border: 1px solid rgba(16, 185, 129, 0.22);
-  border-top: 1.5px solid rgba(255, 255, 255, 0.45);
-  border-left: 1.5px solid rgba(255, 255, 255, 0.45);
-  color: #047857;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18) 0%, rgba(37, 99, 235, 0.06) 45%, rgba(255, 255, 255, 0) 46%, rgba(37, 99, 235, 0.08) 100%);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.55);
+  border-left: 1.5px solid rgba(255, 255, 255, 0.55);
+  color: var(--blue);
   font-weight: 700;
   font-size: 0.92rem;
   border-radius: 30px;
   backdrop-filter: blur(15px) saturate(130%);
   -webkit-backdrop-filter: blur(15px) saturate(130%);
-  filter: url(#liquid-glass-filter);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5), 0 4px 12px rgba(16, 185, 129, 0.08);
-  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
-  will-change: transform;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5), 0 4px 12px rgba(37, 99, 235, 0.06);
+  transition: all 0.2s ease;
 }
 .text-button:hover {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.35) 0%, rgba(16, 185, 129, 0.18) 45%, rgba(255, 255, 255, 0.05) 46%, rgba(16, 185, 129, 0.24) 100%);
-  border-color: rgba(16, 185, 129, 0.4);
-  transform: translateY(-2px) scale(1.03);
-  box-shadow: 
-    1.5px 0 rgba(239, 68, 68, 0.15), 
-    -1.5px 0 rgba(59, 130, 246, 0.15), 
-    inset 0 1px 1.5px rgba(255, 255, 255, 0.7), 
-    0 8px 24px rgba(16, 185, 129, 0.2);
-}
-.text-button:active {
-  transform: translateY(0) scale(1);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.25) 0%, rgba(37, 99, 235, 0.12) 45%, rgba(255, 255, 255, 0.05) 46%, rgba(37, 99, 235, 0.15) 100%);
+  border-color: rgba(37, 99, 235, 0.4);
+  box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.7), 0 8px 24px rgba(37, 99, 235, 0.12);
 }
 
 .quiet-button {
@@ -282,23 +262,13 @@ button {
   border-radius: 30px;
   backdrop-filter: blur(15px) saturate(120%);
   -webkit-backdrop-filter: blur(15px) saturate(120%);
-  filter: url(#liquid-glass-filter);
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5), 0 4px 12px rgba(31, 38, 135, 0.03);
-  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
-  will-change: transform;
+  transition: all 0.2s ease;
 }
 .quiet-button:hover {
   border-color: rgba(255, 255, 255, 0.95);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.25) 45%, rgba(255, 255, 255, 0.05) 46%, rgba(255, 255, 255, 0.2) 100%);
-  transform: translateY(-2px) scale(1.03);
-  box-shadow: 
-    1.5px 0 rgba(239, 68, 68, 0.15), 
-    -1.5px 0 rgba(59, 130, 246, 0.15), 
-    inset 0 1px 1.5px rgba(255, 255, 255, 0.75), 
-    0 8px 20px rgba(0, 0, 0, 0.05);
-}
-.quiet-button:active {
-  transform: translateY(0) scale(1);
+  box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.75), 0 8px 20px rgba(0, 0, 0, 0.05);
 }
 
 /* Glass Card Base Styles (Beveled Pane Highlights) */
@@ -315,15 +285,12 @@ button {
   background-blend-mode: normal;
   backdrop-filter: blur(28px) saturate(135%);
   -webkit-backdrop-filter: blur(28px) saturate(135%);
-  filter: url(#liquid-glass-filter);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-top: 1.5px solid rgba(255, 255, 255, 0.65);
   border-left: 1.5px solid rgba(255, 255, 255, 0.65);
   border-radius: var(--border-radius);
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5), 0 8px 32px rgba(31, 38, 135, 0.05);
-  transform: perspective(1000px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale3d(var(--scale, 1), var(--scale, 1), var(--scale, 1));
-  transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s ease, border-color 0.3s ease;
-  will-change: transform;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
 /* Unified Hero Card */
@@ -582,11 +549,8 @@ button {
   border-top: 1.5px solid rgba(255, 255, 255, 0.85);
   border-left: 1.5px solid rgba(255, 255, 255, 0.85);
   box-shadow: 
-    1.5px 0 rgba(239, 68, 68, 0.15), 
-    -1.5px 0 rgba(59, 130, 246, 0.15), 
     inset 0 1px 1.5px rgba(255, 255, 255, 0.75), 
     0 12px 36px rgba(31, 38, 135, 0.08);
-  --scale: 1.015;
 }
 
 /* Paid member glow overlay */
@@ -736,8 +700,8 @@ textarea {
 .notes-field input:focus,
 #messageBox:focus,
 textarea:focus {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
   background: #ffffff;
 }
 
@@ -992,10 +956,8 @@ textarea:focus {
   cursor: pointer;
   backdrop-filter: blur(15px) saturate(120%);
   -webkit-backdrop-filter: blur(15px) saturate(120%);
-  filter: url(#liquid-glass-filter);
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5), 0 4px 12px rgba(31, 38, 135, 0.03);
-  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
-  will-change: transform;
+  transition: all 0.2s ease;
 }
 .file-button input {
   display: none;
@@ -1003,12 +965,7 @@ textarea:focus {
 .file-button:hover {
   border-color: rgba(255, 255, 255, 0.95);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.25) 45%, rgba(255, 255, 255, 0.05) 46%, rgba(255, 255, 255, 0.2) 100%);
-  transform: translateY(-2px) scale(1.03);
-  box-shadow: 
-    1.5px 0 rgba(239, 68, 68, 0.15), 
-    -1.5px 0 rgba(59, 130, 246, 0.15), 
-    inset 0 1px 1.5px rgba(255, 255, 255, 0.75), 
-    0 8px 20px rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.75), 0 8px 20px rgba(0, 0, 0, 0.05);
 }
 
 .detected-month {
@@ -1198,8 +1155,8 @@ dialog::backdrop {
 }
 .dialog-card select:focus,
 .dialog-card input:focus {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
   background: #ffffff;
 }
 .dialog-grid {
@@ -1254,20 +1211,10 @@ dialog::backdrop {
   }
 }
 
-/* Liquid Glass Displacement Map Hover Effects */
-.hero-card:hover,
-.member-card:hover,
-.import-panel:hover,
-.dialog-card:hover,
-.icon-button:hover,
-.quiet-button:hover,
-.text-button:hover,
-.file-button:hover {
-  filter: url(#liquid-glass-filter);
-}
+/* Glossy Interactive Active States */
 .icon-button:active,
 .quiet-button:active,
 .text-button:active,
 .file-button:active {
-  filter: url(#liquid-glass-filter) brightness(0.95);
+  filter: brightness(0.95);
 }

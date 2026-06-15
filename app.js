@@ -1456,7 +1456,7 @@ syncFromServer();
     requestAnimationFrame(updateBlobs);
   }
 
-  // Card 3D tilt & Specular glare controller using Event Delegation
+  // Card Specular glare controller using Event Delegation (removes 3D tilt calculations to prevent shaking)
   document.body.addEventListener("mousemove", (e) => {
     const card = e.target.closest(".hero-card, .member-card, .import-panel, .dialog-card");
     if (!card) return;
@@ -1469,14 +1469,8 @@ syncFromServer();
     const mx = (x / rect.width) * 100;
     const my = (y / rect.height) * 100;
 
-    // Calculate perspective 3D tilt angle (-7 to 7 degrees)
-    const tiltY = ((x / rect.width) - 0.5) * 14; 
-    const tiltX = -((y / rect.height) - 0.5) * 14; 
-
     card.style.setProperty("--mx", `${mx}%`);
     card.style.setProperty("--my", `${my}%`);
-    card.style.setProperty("--rx", `${tiltX}deg`);
-    card.style.setProperty("--ry", `${tiltY}deg`);
   });
 
   document.body.addEventListener("mouseout", (e) => {
@@ -1489,78 +1483,8 @@ syncFromServer();
     // Smoothly reset positioning variables
     card.style.setProperty("--mx", "50%");
     card.style.setProperty("--my", "50%");
-    card.style.setProperty("--rx", "0deg");
-    card.style.setProperty("--ry", "0deg");
   });
 
-  // Continuous slow movement animation for SVG displacement filter map (liquid glass flow)
-  let flowX = 0;
-  let flowY = 0;
-  let targetScale = 12;
-  let currentScale = 12;
-  let lastMouseX = null;
-  let lastMouseY = null;
-  let mouseVelocity = 0;
-
-  // Listen to window mousemove to compute velocity
-  window.addEventListener("mousemove", (e) => {
-    if (lastMouseX !== null && lastMouseY !== null) {
-      const dx = e.clientX - lastMouseX;
-      const dy = e.clientY - lastMouseY;
-      const dist = Math.hypot(dx, dy);
-      mouseVelocity += dist * 0.12; // accumulate velocity
-      if (mouseVelocity > 48) mouseVelocity = 48; // cap it
-    }
-    lastMouseX = e.clientX;
-    lastMouseY = e.clientY;
-  });
-
-  // Support touch move for mobile velocity
-  window.addEventListener("touchmove", (e) => {
-    if (e.touches && e.touches[0]) {
-      const t = e.touches[0];
-      if (lastMouseX !== null && lastMouseY !== null) {
-        const dx = t.clientX - lastMouseX;
-        const dy = t.clientY - lastMouseY;
-        const dist = Math.hypot(dx, dy);
-        mouseVelocity += dist * 0.12;
-        if (mouseVelocity > 48) mouseVelocity = 48;
-      }
-      lastMouseX = t.clientX;
-      lastMouseY = t.clientY;
-    }
-  });
-
-  function animateDisplacement() {
-    // Increment offsets to make liquid drift slowly
-    flowX += 0.2;
-    flowY += 0.12;
-
-    // Decay the mouse velocity boost
-    mouseVelocity *= 0.94;
-    if (mouseVelocity < 0.05) mouseVelocity = 0;
-
-    // Compute target displacement scale: baseline is 12, max is 12 + 48 = 60
-    // (High displacement values create a strong liquid warping ripple)
-    targetScale = 12 + mouseVelocity;
-
-    // Smoothly interpolate current scale
-    currentScale += (targetScale - currentScale) * 0.08;
-
-    const noiseOffset = document.querySelector("#noise-offset");
-    const dispMap = document.querySelector("#liquid-glass-filter feDisplacementMap");
-
-    if (noiseOffset) {
-      noiseOffset.setAttribute("dx", `${flowX}`);
-      noiseOffset.setAttribute("dy", `${flowY}`);
-    }
-    if (dispMap) {
-      dispMap.setAttribute("scale", `${currentScale.toFixed(2)}`);
-    }
-    requestAnimationFrame(animateDisplacement);
-  }
-
-  // Initialize loops
+  // Initialize loops (only update background blobs, no shaking displacement animation)
   requestAnimationFrame(updateBlobs);
-  requestAnimationFrame(animateDisplacement);
 }
