@@ -113,26 +113,30 @@
             <p class="section-kicker">Member history</p>
             <h2>Person ledger</h2>
           </div>
+          <div class="ledger-actions">
+            <label class="reminder-row" style="margin: 0; padding: 6px 12px; background: rgba(255,255,255,0.4); border-radius: 12px; border: 1px solid rgba(0,0,0,0.05); display: flex; align-items: center;">
+              <input type="checkbox" id="ledgerPendingOnly" style="width:16px;height:16px;cursor:pointer;margin:0;">
+              <span style="font-size:0.88rem;font-weight:600;margin-left:6px;color:var(--ink);">Unpaid only</span>
+            </label>
+          </div>
         </div>
-        <label class="history-picker">
-          <span>Member</span>
-          <select id="historyMemberSelect"></select>
-        </label>
-        <section class="history-summary" aria-label="Member history totals">
+        
+        <section class="history-summary" aria-label="Global ledger totals">
           <article>
-            <span>Total due</span>
-            <strong id="historyTotalDue">$0.00</strong>
+            <span>Total billed</span>
+            <strong id="ledgerGlobalBilled">$0.00</strong>
           </article>
           <article>
-            <span>Total paid</span>
-            <strong id="historyTotalPaid">$0.00</strong>
+            <span>Total collected</span>
+            <strong id="ledgerGlobalCollected">$0.00</strong>
           </article>
           <article>
-            <span>Pending</span>
-            <strong id="historyPending">$0.00</strong>
+            <span>Total outstanding</span>
+            <strong id="ledgerGlobalOutstanding" style="color: var(--red);">$0.00</strong>
           </article>
         </section>
-        <div class="history-list" id="historyList"></div>
+        
+        <div class="ledger-list" id="ledgerList"></div>
       </section>
 
       <section class="view" id="view-message">

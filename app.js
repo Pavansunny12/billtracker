@@ -50,11 +50,11 @@ const els = {
   addMemberButton: document.querySelector("#addMemberButton"),
   exportMonthButton: document.querySelector("#exportMonthButton"),
   memberList: document.querySelector("#memberList"),
-  historyMemberSelect: document.querySelector("#historyMemberSelect"),
-  historyTotalDue: document.querySelector("#historyTotalDue"),
-  historyTotalPaid: document.querySelector("#historyTotalPaid"),
-  historyPending: document.querySelector("#historyPending"),
-  historyList: document.querySelector("#historyList"),
+  ledgerList: document.querySelector("#ledgerList"),
+  ledgerPendingOnly: document.querySelector("#ledgerPendingOnly"),
+  ledgerGlobalBilled: document.querySelector("#ledgerGlobalBilled"),
+  ledgerGlobalCollected: document.querySelector("#ledgerGlobalCollected"),
+  ledgerGlobalOutstanding: document.querySelector("#ledgerGlobalOutstanding"),
   pendingList: document.querySelector("#pendingList"),
   markRemindersButton: document.querySelector("#markRemindersButton"),
   messageBox: document.querySelector("#messageBox"),
@@ -83,6 +83,7 @@ let billSuggestions = [];
 let billAudit = null;
 let detectedBillMonth = "";
 let saveTimer = 0;
+let expandedLedgerKeys = new Set();
 
 function makeId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
@@ -463,75 +464,157 @@ function allMemberOptions() {
 }
 
 function renderHistory() {
-  const options = allMemberOptions();
-  const previousValue = els.historyMemberSelect.value || localStorage.getItem("bill-collect-history-member") || "";
-  els.historyMemberSelect.innerHTML = "";
+  const members = allMemberOptions();
 
-  options.forEach((member) => {
-    const option = document.createElement("option");
-    option.value = member.key;
-    option.textContent = member.phone ? `${member.name} (${member.phone})` : member.name;
-    els.historyMemberSelect.appendChild(option);
+  // Load unpaid filter preference
+  els.ledgerPendingOnly.checked = localStorage.getItem("bill-collect-ledger-pending-only") === "true";
+
+  // Calculate totals for all members across all months
+  const ledgerData = members.map((member) => {
+    let totalDue = 0;
+    let totalPaid = 0;
+
+    const rows = state.months.map((month) => {
+      const entry = month.members.find((m) => memberKey(m) === member.key);
+      if (!entry) return null;
+      const due = Number(entry.due || 0);
+      const paid = Number(entry.received || 0);
+      totalDue += due;
+      totalPaid += paid;
+      return {
+        month: month.label,
+        due,
+        paid,
+        pending: Math.max(due - paid, 0),
+        isPaid: entry.paid,
+        datePaid: entry.datePaid,
+        method: entry.method,
+        notes: entry.notes
+      };
+    }).filter(Boolean);
+
+    return {
+      key: member.key,
+      name: member.name,
+      phone: member.phone,
+      totalDue,
+      totalPaid,
+      totalPending: Math.max(totalDue - totalPaid, 0),
+      rows
+    };
   });
 
-  const selectedKey = options.some((member) => member.key === previousValue)
-    ? previousValue
-    : options[0]?.key || "";
-  els.historyMemberSelect.value = selectedKey;
-  if (selectedKey) localStorage.setItem("bill-collect-history-member", selectedKey);
+  // Calculate global totals
+  let globalBilled = 0;
+  let globalCollected = 0;
 
-  const rows = selectedKey
-    ? state.months
-        .map((month) => {
-          const member = month.members.find((entry) => memberKey(entry) === selectedKey);
-          if (!member) return null;
-          const due = Number(member.due || 0);
-          const paid = Number(member.received || 0);
-          return {
-            month: month.label,
-            due,
-            paid,
-            pending: Math.max(due - paid, 0),
-            isPaid: member.paid,
-            datePaid: member.datePaid,
-            method: member.method,
-            notes: member.notes
-          };
-        })
-        .filter(Boolean)
-    : [];
+  ledgerData.forEach((member) => {
+    globalBilled += member.totalDue;
+    globalCollected += member.totalPaid;
+  });
 
-  const totalDue = rows.reduce((sum, row) => sum + row.due, 0);
-  const totalPaid = rows.reduce((sum, row) => sum + row.paid, 0);
-  const totalPending = Math.max(totalDue - totalPaid, 0);
-  els.historyTotalDue.textContent = money(totalDue);
-  els.historyTotalPaid.textContent = money(totalPaid);
-  els.historyPending.textContent = money(totalPending);
+  const globalOutstanding = Math.max(globalBilled - globalCollected, 0);
 
-  els.historyList.innerHTML = "";
-  rows.forEach((row) => {
-    const article = document.createElement("article");
-    article.className = "history-row";
-    article.innerHTML = `
-      <header>
-        <div>
-          <h3>${escapeHtml(row.month)}</h3>
-          <p>${row.datePaid ? `Paid ${escapeHtml(row.datePaid)}` : "No paid date"}${row.method ? ` · ${escapeHtml(row.method)}` : ""}</p>
+  els.ledgerGlobalBilled.textContent = money(globalBilled);
+  els.ledgerGlobalCollected.textContent = money(globalCollected);
+  els.ledgerGlobalOutstanding.textContent = money(globalOutstanding);
+
+  // Apply filters
+  const unpaidOnly = els.ledgerPendingOnly.checked;
+  const filteredData = unpaidOnly
+    ? ledgerData.filter((member) => member.totalPending > 0)
+    : ledgerData;
+
+  // Render cards in ledger container
+  els.ledgerList.innerHTML = "";
+
+  filteredData.forEach((member) => {
+    const isExpanded = expandedLedgerKeys.has(member.key);
+
+    const card = document.createElement("article");
+    card.className = `ledger-card ${isExpanded ? "is-expanded" : ""}`;
+    card.dataset.memberKey = member.key;
+
+    // Render month-by-month history rows
+    let monthsHtml = "";
+    if (member.rows.length === 0) {
+      monthsHtml = `<div class="ledger-detail-row" style="justify-content: center; color: var(--muted); padding: 12px 0;">No history found.</div>`;
+    } else {
+      member.rows.forEach((row) => {
+        monthsHtml += `
+          <div class="ledger-detail-row">
+            <div class="ledger-detail-info">
+              <h4>${escapeHtml(row.month)}</h4>
+              <p>${row.datePaid ? `Paid ${escapeHtml(row.datePaid)}` : "Unpaid"}${row.method ? ` via ${escapeHtml(row.method)}` : ""}</p>
+            </div>
+            <div class="ledger-detail-metrics">
+              <div class="m-item">
+                <span>Due</span>
+                <strong>${money(row.due)}</strong>
+              </div>
+              <div class="m-item">
+                <span>Paid</span>
+                <strong>${money(row.paid)}</strong>
+              </div>
+              <span class="ledger-detail-status ${row.pending <= 0 ? "" : "is-pending"}">
+                ${row.pending <= 0 ? "Clear" : "Pending"}
+              </span>
+            </div>
+          </div>
+          ${row.notes ? `<p style="margin: 4px 0 8px 0; font-size: 0.8rem; color: var(--muted); background: rgba(0,0,0,0.02); padding: 6px 10px; border-radius: 6px;">${escapeHtml(row.notes)}</p>` : ""}
+        `;
+      });
+    }
+
+    card.innerHTML = `
+      <header class="ledger-card-header">
+        <div class="ledger-info">
+          <h3>${escapeHtml(member.name)}</h3>
+          ${member.phone ? `<p class="ledger-phone">${escapeHtml(member.phone)}</p>` : ""}
         </div>
-        <strong class="history-status ${row.pending <= 0 ? "is-paid" : ""}">${row.pending <= 0 ? "Clear" : "Pending"}</strong>
+        <div class="ledger-metrics">
+          <div class="metric">
+            <span>Billed</span>
+            <strong>${money(member.totalDue)}</strong>
+          </div>
+          <div class="metric">
+            <span>Paid</span>
+            <strong>${money(member.totalPaid)}</strong>
+          </div>
+          <div class="metric highlight-pending">
+             <span>Pending</span>
+             <strong class="pending-amount ${member.totalPending <= 0 ? "is-clear" : ""}">${money(member.totalPending)}</strong>
+          </div>
+        </div>
+        <button class="ledger-toggle-btn" aria-label="Toggle details">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m6 9 6 6 6-6"/>
+          </svg>
+        </button>
       </header>
-      <div class="history-money">
-        <div><span>Due</span><strong>${money(row.due)}</strong></div>
-        <div><span>Paid</span><strong>${money(row.paid)}</strong></div>
-        <div><span>Pending</span><strong>${money(row.pending)}</strong></div>
+      <div class="ledger-details-expand" style="display: ${isExpanded ? "block" : "none"};">
+        ${monthsHtml}
       </div>
-      ${row.notes ? `<p>${escapeHtml(row.notes)}</p>` : ""}
     `;
-    els.historyList.appendChild(article);
+
+    // Click logic to expand details
+    const header = card.querySelector(".ledger-card-header");
+    const details = card.querySelector(".ledger-details-expand");
+    header.addEventListener("click", () => {
+      const nowExpanded = card.classList.toggle("is-expanded");
+      details.style.display = nowExpanded ? "block" : "none";
+      if (nowExpanded) {
+        expandedLedgerKeys.add(member.key);
+      } else {
+        expandedLedgerKeys.delete(member.key);
+      }
+    });
+
+    els.ledgerList.appendChild(card);
   });
 
-  if (!rows.length) {
-    els.historyList.innerHTML = '<article class="history-row"><header><div><h3>No history</h3><p>This member has no monthly records yet.</p></div><strong class="history-status is-paid">$0.00</strong></header></article>';
+  if (filteredData.length === 0) {
+    els.ledgerList.innerHTML = `<div class="ledger-card" style="padding: 24px; text-align: center; color: var(--muted); font-weight: 500;">No members match the current filter.</div>`;
   }
 }
 
