@@ -16,7 +16,7 @@ const starterMembers = [
   { name: "Joshua Ebenezer", phone: "2672798757", due: 49.85, attName: "Joshua Ebenezer" },
   { name: "Roshan Ambati", phone: "5132008454", due: 40.98, attName: "Roshan Ambati" },
   { name: "Krishnakoushik Paisa", phone: "5132230636", due: 40.98, attName: "Krishnakoushik Paisa" },
-  { name: "Bunty", phone: "5139684224", due: 40.98, attName: "Ajay Mannam" },
+  { name: "Ajay Mannam", phone: "5139684224", due: 40.98, attName: "Ajay Mannam" },
   { name: "Areef AT&T", phone: "6602385180", due: 71.33, attName: "Ashutosh Agnihotri" }
 ];
 
@@ -772,14 +772,14 @@ function resolveCanonicalName(attName) {
   if (lower === "new line") return "Hanumanth Kuchi";
   if (lower === "att customer") return "Praneetha Chowdary";
   if (lower === "indhu g.") return "Sindhu";
-  if (lower === "ajay mannam") return "Bunty";
+  if (lower === "ajay mannam") return "Ajay Mannam";
   if (lower === "ashutosh agnihotri") return "Areef AT&T";
   
   // Fuzzy matching or case insensitive exact match of the keys
   if (lower.includes("new line")) return "Hanumanth Kuchi";
   if (lower.includes("att customer")) return "Praneetha Chowdary";
   if (lower.includes("indhu g")) return "Sindhu";
-  if (lower.includes("ajay mann")) return "Bunty";
+  if (lower.includes("ajay mann")) return "Ajay Mannam";
   if (lower.includes("ashutosh")) return "Areef AT&T";
   
   return cleaned;
