@@ -536,6 +536,7 @@ function renderHistory() {
 }
 
 function renderPending() {
+  if (!els.pendingList) return;
   const pendingMembers = activeMonth().members.filter((member) => !member.paid && !member.excluded);
   els.pendingList.innerHTML = "";
   pendingMembers.forEach((member) => {
@@ -1380,9 +1381,11 @@ els.addMemberButton.addEventListener("click", addMember);
 els.exportMonthButton.addEventListener("click", exportCurrentMonthCsv);
 els.newMonthButton.addEventListener("click", createNextMonth);
 els.renameMonthButton.addEventListener("click", renameMonth);
-els.unpaidOnlyInput.addEventListener("change", renderMembers);
-els.markRemindersButton.addEventListener("click", markRemindersSent);
-els.copyMessageButton.addEventListener("click", copyMessage);
+  els.unpaidOnlyInput.addEventListener("change", renderMembers);
+  if (els.markRemindersButton) {
+    els.markRemindersButton.addEventListener("click", markRemindersSent);
+  }
+  els.copyMessageButton.addEventListener("click", copyMessage);
 els.billFileInput.addEventListener("change", () => readTextFile(els.billFileInput, els.billTextInput));
 els.chatFileInput.addEventListener("change", () => readTextFile(els.chatFileInput, els.chatTextInput));
 els.exportBackupButton.addEventListener("click", exportBackup);

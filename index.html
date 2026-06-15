@@ -18,76 +18,74 @@
   <body>
     <main class="app-shell">
       <header class="topbar">
-        <div>
+        <div class="topbar-left">
           <p class="eyebrow">AT&amp;T family plan</p>
           <h1>Bill Collect</h1>
           <span class="sync-status" id="syncStatus">Local</span>
         </div>
-        <button class="icon-button" id="newMonthButton" type="button" aria-label="Create next month" title="Create next month">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-        </button>
+        <div class="topbar-right">
+          <select id="monthSelect"></select>
+          <button class="icon-button" id="renameMonthButton" type="button" aria-label="Rename month" title="Rename month">
+            <svg viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+          </button>
+          <button class="icon-button" id="newMonthButton" type="button" aria-label="Create next month" title="Create next month">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          </button>
+        </div>
       </header>
 
-      <section class="month-strip" aria-label="Month selection">
-        <select id="monthSelect"></select>
-        <button class="quiet-button" id="renameMonthButton" type="button">Rename</button>
-      </section>
-
-      <section class="summary-band" aria-label="Collection summary">
-        <div class="summary-main">
-          <p class="section-kicker">Remaining</p>
-          <strong id="remainingAmount">$0.00</strong>
-          <span id="progressText">0 of 0 paid</span>
+      <section class="hero-card" aria-label="Dashboard Summary">
+        <div class="hero-left">
+          <div class="hero-remaining">
+            <p class="section-kicker">Remaining</p>
+            <strong id="remainingAmount">$0.00</strong>
+            <span id="progressText">0 of 0 paid</span>
+          </div>
+          <div class="hero-subgrid">
+            <div class="hero-metric-item">
+              <span>Total Bill</span>
+              <strong id="totalBill">$0.00</strong>
+            </div>
+            <div class="hero-metric-item">
+              <span>Owner Paid</span>
+              <strong id="ownerPaidAmount">$0.00</strong>
+            </div>
+            <div class="hero-metric-item">
+              <span>Collectible</span>
+              <strong id="collectibleAmount">$0.00</strong>
+            </div>
+          </div>
         </div>
-        <div class="progress-ring" aria-hidden="true">
-          <svg viewBox="0 0 120 120">
-            <circle class="ring-bg" cx="60" cy="60" r="48"></circle>
-            <circle class="ring-fill" id="progressCircle" cx="60" cy="60" r="48"></circle>
-          </svg>
-          <b id="progressValue">0%</b>
+        <div class="hero-right">
+          <div class="progress-ring" aria-hidden="true">
+            <svg viewBox="0 0 120 120">
+              <circle class="ring-bg" cx="60" cy="60" r="48"></circle>
+              <circle class="ring-fill" id="progressCircle" cx="60" cy="60" r="48"></circle>
+            </svg>
+            <b id="progressValue">0%</b>
+          </div>
+          <div class="hero-legend">
+            <div class="hero-legend-item">
+              <span>Collected</span>
+              <strong id="workflowCollected">$0.00</strong>
+            </div>
+            <div class="hero-legend-item">
+              <span>Paid</span>
+              <strong id="workflowPaidCount">0</strong>
+            </div>
+            <div class="hero-legend-item">
+              <span>Pending</span>
+              <strong id="workflowPendingCount">0</strong>
+            </div>
+          </div>
         </div>
-      </section>
-
-      <section class="stat-grid" aria-label="Totals">
-        <article>
-          <span>Total bill</span>
-          <strong id="totalBill">$0.00</strong>
-        </article>
-        <article>
-          <span>Owner Paid</span>
-          <strong id="ownerPaidAmount">$0.00</strong>
-        </article>
-        <article>
-          <span>Collectible</span>
-          <strong id="collectibleAmount">$0.00</strong>
-        </article>
-      </section>
-
-      <section class="workflow-strip" aria-label="Month workflow">
-        <article>
-          <span>Month</span>
-          <strong id="workflowMonth">-</strong>
-        </article>
-        <article>
-          <span>Collected</span>
-          <strong id="workflowCollected">$0.00</strong>
-        </article>
-        <article>
-          <span>Paid</span>
-          <strong id="workflowPaidCount">0</strong>
-        </article>
-        <article>
-          <span>Pending</span>
-          <strong id="workflowPendingCount">0</strong>
-        </article>
       </section>
 
       <nav class="tabs" aria-label="App sections">
-        <button class="tab is-active" data-view="members" type="button">Members</button>
-        <button class="tab" data-view="history" type="button">History</button>
-        <button class="tab" data-view="pending" type="button">Pending</button>
-        <button class="tab" data-view="message" type="button">Message</button>
-        <button class="tab" data-view="import" type="button">Import</button>
+        <button class="tab is-active" data-view="members" type="button">Collection</button>
+        <button class="tab" data-view="history" type="button">Ledger</button>
+        <button class="tab" data-view="message" type="button">WhatsApp</button>
+        <button class="tab" data-view="import" type="button">Import &amp; Backup</button>
       </nav>
 
       <section class="view is-active" id="view-members">
@@ -134,17 +132,6 @@
           </article>
         </section>
         <div class="history-list" id="historyList"></div>
-      </section>
-
-      <section class="view" id="view-pending">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">Collect</p>
-            <h2>Who still owes</h2>
-          </div>
-          <button class="quiet-button" id="markRemindersButton" type="button">Mark sent</button>
-        </div>
-        <div class="pending-list" id="pendingList"></div>
       </section>
 
       <section class="view" id="view-message">
