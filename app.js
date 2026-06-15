@@ -1401,3 +1401,98 @@ if ("serviceWorker" in navigator && window.isSecureContext) {
 
 render();
 syncFromServer();
+
+// Liquid Glass Interactive Engine
+{
+  let targetMouseX = window.innerWidth / 2;
+  let targetMouseY = window.innerHeight / 2;
+  let currentMouseX = targetMouseX;
+  let currentMouseY = targetMouseY;
+
+  // Track mouse position globally
+  window.addEventListener("mousemove", (e) => {
+    targetMouseX = e.clientX;
+    targetMouseY = e.clientY;
+  });
+
+  // Touch support for mobile devices
+  window.addEventListener("touchmove", (e) => {
+    if (e.touches && e.touches[0]) {
+      targetMouseX = e.touches[0].clientX;
+      targetMouseY = e.touches[0].clientY;
+    }
+  });
+
+  // Update loop for smooth background spring movement (elasticity & displacement)
+  function updateBlobs() {
+    const elasticity = 0.035;
+    currentMouseX += (targetMouseX - currentMouseX) * elasticity;
+    currentMouseY += (targetMouseY - currentMouseY) * elasticity;
+
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    
+    // Normalize coordinates around zero (-0.5 to 0.5)
+    const pctX = (currentMouseX / (vw || 1)) - 0.5;
+    const pctY = (currentMouseY / (vh || 1)) - 0.5;
+
+    // Shift offsets for layers
+    const b1x = pctX * -80; 
+    const b1y = pctY * -80;
+    
+    const b2x = pctX * 90;
+    const b2y = pctY * 90;
+    
+    const b3x = pctX * 55;
+    const b3y = pctY * 55;
+
+    document.body.style.setProperty("--blob1-x", `${b1x}px`);
+    document.body.style.setProperty("--blob1-y", `${b1y}px`);
+    document.body.style.setProperty("--blob2-x", `${b2x}px`);
+    document.body.style.setProperty("--blob2-y", `${b2y}px`);
+    document.body.style.setProperty("--blob3-x", `${b3x}px`);
+    document.body.style.setProperty("--blob3-y", `${b3y}px`);
+
+    requestAnimationFrame(updateBlobs);
+  }
+
+  // Card 3D tilt & Specular glare controller using Event Delegation
+  document.body.addEventListener("mousemove", (e) => {
+    const card = e.target.closest(".hero-card, .member-card, .import-panel, .dialog-card");
+    if (!card) return;
+
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left; 
+    const y = e.clientY - rect.top;  
+
+    // Calculate mouse percentages (0 to 100)
+    const mx = (x / rect.width) * 100;
+    const my = (y / rect.height) * 100;
+
+    // Calculate perspective 3D tilt angle (-7 to 7 degrees)
+    const tiltY = ((x / rect.width) - 0.5) * 14; 
+    const tiltX = -((y / rect.height) - 0.5) * 14; 
+
+    card.style.setProperty("--mx", `${mx}%`);
+    card.style.setProperty("--my", `${my}%`);
+    card.style.setProperty("--rx", `${tiltX}deg`);
+    card.style.setProperty("--ry", `${tiltY}deg`);
+  });
+
+  document.body.addEventListener("mouseout", (e) => {
+    const card = e.target.closest(".hero-card, .member-card, .import-panel, .dialog-card");
+    if (!card) return;
+
+    const related = e.relatedTarget;
+    if (related && card.contains(related)) return;
+
+    // Smoothly reset positioning variables
+    card.style.setProperty("--mx", "50%");
+    card.style.setProperty("--my", "50%");
+    card.style.setProperty("--rx", "0deg");
+    card.style.setProperty("--ry", "0deg");
+  });
+
+  // Initialize background spring loop
+  requestAnimationFrame(updateBlobs);
+}
