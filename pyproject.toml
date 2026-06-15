@@ -1,2 +1,2 @@
 [tool.vercel]
-entrypoint = "api.extract-pdf:handler"
+entrypoint = "api.extract_pdf:handler"

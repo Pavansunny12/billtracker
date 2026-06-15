@@ -1136,7 +1136,7 @@ async function extractFileText(file) {
   if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
     els.importResults.textContent = "Extracting PDF text...";
     try {
-      const response = await fetch("./api/extract-pdf", {
+      const response = await fetch("./api/extract_pdf", {
         method: "POST",
         headers: { "Content-Type": "application/pdf" },
         body: file

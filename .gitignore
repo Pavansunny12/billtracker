@@ -6,3 +6,4 @@ server.py
 *.swp
 .DS_Store
 .vercel/
+.vercel

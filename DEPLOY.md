@@ -3,7 +3,7 @@
 ## What This Deployment Includes
 - Mobile PWA frontend
 - Installable iPhone app shell
-- AT&T PDF text extraction through `/api/extract-pdf`
+- AT&T PDF text extraction through `/api/extract_pdf`
 - Local browser storage for members, months, payments, history, backups, and WhatsApp import
 
 ## Important Limitation
@@ -27,7 +27,7 @@ That means:
    - `app.js`
    - `styles.css`
    - `vercel.json`
-   - `api/extract-pdf.py`
+   - `api/extract_pdf.py`
 6. Framework preset: `Other`.
 7. Build command: `npm run build`
 8. Output directory: leave empty.
