@@ -15,5 +15,17 @@
         }
       ]
     }
+  ],
+  "builds": [
+    { "src": "api/extract_pdf.py", "use": "@vercel/python" },
+    { "src": "*.html", "use": "@vercel/static" },
+    { "src": "*.js", "use": "@vercel/static" },
+    { "src": "*.css", "use": "@vercel/static" },
+    { "src": "*.webmanifest", "use": "@vercel/static" },
+    { "src": "icons/*", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/extract_pdf", "dest": "api/extract_pdf.py" },
+    { "handle": "filesystem" }
   ]
 }
