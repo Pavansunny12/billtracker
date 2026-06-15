@@ -807,28 +807,81 @@ function scanBillText() {
 function extractAttBillTotals(text) {
   const totals = new Map();
   const allText = String(text || "");
+  const lines = allText.split(/\r?\n/);
 
-  const totalForRegex = /Total\s+for\s+(?:1[.\-\s]?)?(\d{3})[.\-\s]?(\d{3})[.\-\s]?(\d{4})\s+\$?\s*(\d{1,4}(?:,\d{3})*(?:\.\d{2}))/gi;
+  function findNameNear(lines, phoneIdx) {
+    const keywords = /^(total|page|bill|date|account|at&t|summary|activity|talk|text|data|group|plan|shared|device|service|monthly|charges|fees|taxes|credits|adjustments|payments|previous|balance|due|autopay|scheduled)/i;
+    for (let offset = 1; offset <= 3; offset++) {
+      const idx = phoneIdx - offset;
+      if (idx < 0) break;
+      const candidate = lines[idx].trim();
+      if (candidate.length > 2 && candidate.length < 40 && !keywords.test(candidate)) {
+        if (/^[a-zA-Z]+[a-zA-Z\s.'\-]*$/.test(candidate)) {
+          return candidate;
+        }
+      }
+    }
+    return "";
+  }
+
+  // Support name optionally between phone number and amount
+  const totalForRegex = /Total\s+for\s+(?:1[.\-\s]?)?(\d{3})[.\-\s]?(\d{3})[.\-\s]?(\d{4})\s*(.*?)\s*\$?\s*(\d{1,4}(?:,\d{3})*(?:\.\d{2}))/gi;
   let match;
   while ((match = totalForRegex.exec(allText))) {
-    totals.set(`${match[1]}${match[2]}${match[3]}`, {
-      amount: Number(match[4].replace(/,/g, "")),
-      source: `Total for ${match[1]}.${match[2]}.${match[3]} ${money(Number(match[4].replace(/,/g, "")))}`,
-      confidence: 99
+    const digits = `${match[1]}${match[2]}${match[3]}`;
+    const middleText = match[4].trim();
+    const amount = Number(match[5].replace(/,/g, ""));
+    const sourceLine = match[0];
+    
+    let name = "";
+    const keywords = /^(total|page|bill|date|account|at&t|summary|activity|talk|text|data|group|plan|shared|device|service|monthly|charges|fees|taxes|credits|adjustments|payments|previous|balance|due|autopay|scheduled)/i;
+    if (middleText.length > 2 && middleText.length < 40 && !keywords.test(middleText)) {
+      if (/^[a-zA-Z\s.'\-]+$/.test(middleText)) {
+        name = middleText;
+      }
+    }
+
+    if (!name) {
+      const lineIndex = lines.findIndex(l => l.includes(sourceLine));
+      if (lineIndex >= 0) {
+        name = findNameNear(lines, lineIndex);
+      }
+    }
+
+    totals.set(digits, {
+      amount,
+      source: `Total for ${match[1]}.${match[2]}.${match[3]} ${money(amount)}`,
+      confidence: 99,
+      name
     });
   }
 
-  allText.split(/\r?\n/).forEach((line) => {
-    const rowMatch = line.match(/^(?:1[.\-\s]?)?(\d{3})[.\-\s](\d{3})[.\-\s](\d{4})\s+.+?\$?\s*(-?\d{1,4}(?:,\d{3})*(?:\.\d{2}))\s*$/);
+  allText.split(/\r?\n/).forEach((line, index) => {
+    const rowMatch = line.match(/^(?:1[.\-\s]?)?(\d{3})[.\-\s](\d{3})[.\-\s](\d{4})\s+(.+?)\s+\$?\s*(-?\d{1,4}(?:,\d{3})*(?:\.\d{2}))\s*$/);
     if (!rowMatch) return;
     const digits = `${rowMatch[1]}${rowMatch[2]}${rowMatch[3]}`;
     if (totals.has(digits)) return;
-    const amount = Number(rowMatch[4].replace(/,/g, ""));
+    const middleText = rowMatch[4].trim();
+    const amount = Number(rowMatch[5].replace(/,/g, ""));
     if (!Number.isFinite(amount) || amount <= 0 || amount >= 300) return;
+
+    let name = "";
+    const keywords = /^(total|page|bill|date|account|at&t|summary|activity|talk|text|data|group|plan|shared|device|service|monthly|charges|fees|taxes|credits|adjustments|payments|previous|balance|due|autopay|scheduled)/i;
+    if (middleText.length > 2 && middleText.length < 40 && !keywords.test(middleText)) {
+      if (/^[a-zA-Z\s.'\-]+$/.test(middleText)) {
+        name = middleText;
+      }
+    }
+
+    if (!name) {
+      name = findNameNear(lines, index);
+    }
+
     totals.set(digits, {
       amount,
       source: line.trim(),
-      confidence: 96
+      confidence: 96,
+      name
     });
   });
 
