@@ -1494,16 +1494,68 @@ syncFromServer();
   });
 
   // Continuous slow movement animation for SVG displacement filter map (liquid glass flow)
-  let offset = 0;
+  let flowX = 0;
+  let flowY = 0;
+  let targetScale = 12;
+  let currentScale = 12;
+  let lastMouseX = null;
+  let lastMouseY = null;
+  let mouseVelocity = 0;
+
+  // Listen to window mousemove to compute velocity
+  window.addEventListener("mousemove", (e) => {
+    if (lastMouseX !== null && lastMouseY !== null) {
+      const dx = e.clientX - lastMouseX;
+      const dy = e.clientY - lastMouseY;
+      const dist = Math.hypot(dx, dy);
+      mouseVelocity += dist * 0.12; // accumulate velocity
+      if (mouseVelocity > 48) mouseVelocity = 48; // cap it
+    }
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+  });
+
+  // Support touch move for mobile velocity
+  window.addEventListener("touchmove", (e) => {
+    if (e.touches && e.touches[0]) {
+      const t = e.touches[0];
+      if (lastMouseX !== null && lastMouseY !== null) {
+        const dx = t.clientX - lastMouseX;
+        const dy = t.clientY - lastMouseY;
+        const dist = Math.hypot(dx, dy);
+        mouseVelocity += dist * 0.12;
+        if (mouseVelocity > 48) mouseVelocity = 48;
+      }
+      lastMouseX = t.clientX;
+      lastMouseY = t.clientY;
+    }
+  });
+
   function animateDisplacement() {
-    offset += 0.035;
+    // Increment offsets to make liquid drift slowly
+    flowX += 0.2;
+    flowY += 0.12;
+
+    // Decay the mouse velocity boost
+    mouseVelocity *= 0.94;
+    if (mouseVelocity < 0.05) mouseVelocity = 0;
+
+    // Compute target displacement scale: baseline is 12, max is 12 + 48 = 60
+    // (High displacement values create a strong liquid warping ripple)
+    targetScale = 12 + mouseVelocity;
+
+    // Smoothly interpolate current scale
+    currentScale += (targetScale - currentScale) * 0.08;
+
     const noiseOffset = document.querySelector("#noise-offset");
+    const dispMap = document.querySelector("#liquid-glass-filter feDisplacementMap");
+
     if (noiseOffset) {
-      // Orbit the noise coordinates in a circular path
-      const shiftX = Math.sin(offset) * 12;
-      const shiftY = Math.cos(offset) * 12;
-      noiseOffset.setAttribute("dx", `${shiftX}`);
-      noiseOffset.setAttribute("dy", `${shiftY}`);
+      noiseOffset.setAttribute("dx", `${flowX}`);
+      noiseOffset.setAttribute("dy", `${flowY}`);
+    }
+    if (dispMap) {
+      dispMap.setAttribute("scale", `${currentScale.toFixed(2)}`);
     }
     requestAnimationFrame(animateDisplacement);
   }
