@@ -1493,6 +1493,22 @@ syncFromServer();
     card.style.setProperty("--ry", "0deg");
   });
 
-  // Initialize background spring loop
+  // Continuous slow movement animation for SVG displacement filter map (liquid glass flow)
+  let offset = 0;
+  function animateDisplacement() {
+    offset += 0.003;
+    const dispImg = document.querySelector("#liquid-glass-filter feImage");
+    if (dispImg) {
+      // Move map coordinate in a slow orbital path
+      const shiftX = Math.sin(offset) * 0.08;
+      const shiftY = Math.cos(offset) * 0.08;
+      dispImg.setAttribute("x", `${shiftX}`);
+      dispImg.setAttribute("y", `${shiftY}`);
+    }
+    requestAnimationFrame(animateDisplacement);
+  }
+
+  // Initialize loops
   requestAnimationFrame(updateBlobs);
+  requestAnimationFrame(animateDisplacement);
 }

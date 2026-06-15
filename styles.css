@@ -1248,3 +1248,21 @@ dialog::backdrop {
     grid-template-columns: 1fr;
   }
 }
+
+/* Liquid Glass Displacement Map Hover Effects */
+.hero-card:hover,
+.member-card:hover,
+.import-panel:hover,
+.dialog-card:hover,
+.icon-button:hover,
+.quiet-button:hover,
+.text-button:hover,
+.file-button:hover {
+  filter: url(#liquid-glass-filter);
+}
+.icon-button:active,
+.quiet-button:active,
+.text-button:active,
+.file-button:active {
+  filter: url(#liquid-glass-filter) brightness(0.95);
+}
