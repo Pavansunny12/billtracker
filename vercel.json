@@ -1,11 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
-  "functions": {
-    "api/extract-pdf.py": {
-      "maxDuration": 15
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",
