@@ -97,7 +97,7 @@ function monthLabel(date = new Date()) {
 }
 
 function createMember(member) {
-  const digits = phoneDigits(member.phone);
+  const digits = last10Digits(member.phone);
   return {
     id: makeId(),
     name: canonicalNamesByPhone[digits] || member.name,
@@ -113,7 +113,7 @@ function createMember(member) {
 }
 
 function normalizeMember(member) {
-  const digits = phoneDigits(member.phone);
+  const digits = last10Digits(member.phone);
   return {
     id: member.id || makeId(),
     name: canonicalNamesByPhone[digits] || member.name || "Unnamed",
@@ -137,6 +137,19 @@ function createMonth(label, sourceMembers = starterMembers) {
 }
 
 function normalizeState(parsed) {
+  if (Array.isArray(parsed.months)) {
+    parsed.months.forEach((month) => {
+      if (Array.isArray(month.members)) {
+        month.members.forEach((member) => {
+          const digits = last10Digits(member.phone);
+          if (digits && member.name) {
+            canonicalNamesByPhone[digits] = member.name;
+          }
+        });
+      }
+    });
+  }
+
   const months = Array.isArray(parsed.months)
     ? parsed.months
         .filter((month) => Array.isArray(month.members))
@@ -343,7 +356,13 @@ function addMember() {
   if (!name?.trim()) return;
   const phone = prompt("Phone number", "") || "";
   const due = Number(prompt("Default amount due", "0") || 0);
-  const member = createMember({ name: name.trim(), phone: phone.trim(), due: Math.max(due, 0) });
+  const cleanedName = name.trim();
+  const cleanedPhone = phone.trim();
+  const digits = last10Digits(cleanedPhone);
+  if (digits && cleanedName) {
+    canonicalNamesByPhone[digits] = cleanedName;
+  }
+  const member = createMember({ name: cleanedName, phone: cleanedPhone, due: Math.max(due, 0) });
   activeMonth().members.push(member);
   saveState();
   render();
@@ -358,6 +377,11 @@ function editMember(id) {
   const oldKey = memberKey(member);
   const newName = name.trim();
   const newPhone = phone.trim();
+
+  const digits = last10Digits(newPhone);
+  if (digits && newName) {
+    canonicalNamesByPhone[digits] = newName;
+  }
 
   state.months.forEach((month) => {
     month.members.forEach((entry) => {
@@ -380,7 +404,7 @@ function removeMember(id) {
 }
 
 function memberKey(member) {
-  const digits = phoneDigits(member.phone);
+  const digits = last10Digits(member.phone);
   return digits || normalize(member.name);
 }
 
@@ -696,16 +720,23 @@ function phoneDigits(value) {
   return String(value || "").replace(/\D/g, "");
 }
 
+function last10Digits(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+}
+
 function phonePattern(digits) {
-  return `${digits.slice(0, 3)}[.\\-\\s]?${digits.slice(3, 6)}[.\\-\\s]?${digits.slice(6)}`;
+  const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
+  return `${last10.slice(0, 3)}[.\\-\\s]?${last10.slice(3, 6)}[.\\-\\s]?${last10.slice(6)}`;
 }
 
 function findMemberByText(text) {
   const cleaned = normalize(text);
-  const digits = phoneDigits(text);
+  const digits = last10Digits(text);
   return activeMonth().members.find((member) => {
-    const memberDigits = phoneDigits(member.phone);
-    if (memberDigits && digits.includes(memberDigits)) return true;
+    const memberDigits = last10Digits(member.phone);
+    if (memberDigits && digits && memberDigits.includes(digits)) return true;
+    if (memberDigits && digits && digits.includes(memberDigits)) return true;
     const name = normalize(member.name);
     if (name && cleaned.includes(name)) return true;
     const firstName = normalize(member.name.split(" ")[0]);
@@ -755,7 +786,7 @@ function extractAttBillTotals(text) {
   const totals = new Map();
   const allText = String(text || "");
 
-  const totalForRegex = /Total\s+for\s+(\d{3})[.\-\s]?(\d{3})[.\-\s]?(\d{4})\s+\$?\s*(\d{1,4}(?:,\d{3})*(?:\.\d{2}))/gi;
+  const totalForRegex = /Total\s+for\s+(?:1[.\-\s]?)?(\d{3})[.\-\s]?(\d{3})[.\-\s]?(\d{4})\s+\$?\s*(\d{1,4}(?:,\d{3})*(?:\.\d{2}))/gi;
   let match;
   while ((match = totalForRegex.exec(allText))) {
     totals.set(`${match[1]}${match[2]}${match[3]}`, {
@@ -766,7 +797,7 @@ function extractAttBillTotals(text) {
   }
 
   allText.split(/\r?\n/).forEach((line) => {
-    const rowMatch = line.match(/^(\d{3})[.\-\s](\d{3})[.\-\s](\d{4})\s+.+?\$?\s*(-?\d{1,4}(?:,\d{3})*(?:\.\d{2}))\s*$/);
+    const rowMatch = line.match(/^(?:1[.\-\s]?)?(\d{3})[.\-\s](\d{3})[.\-\s](\d{4})\s+.+?\$?\s*(-?\d{1,4}(?:,\d{3})*(?:\.\d{2}))\s*$/);
     if (!rowMatch) return;
     const digits = `${rowMatch[1]}${rowMatch[2]}${rowMatch[3]}`;
     if (totals.has(digits)) return;
@@ -785,7 +816,7 @@ function extractAttBillTotals(text) {
 function suggestAmountForMember(member, lines, attTotals = new Map()) {
   const memberName = normalize(member.name);
   const firstName = normalize(member.name.split(" ")[0]);
-  const memberPhone = phoneDigits(member.phone);
+  const memberPhone = last10Digits(member.phone);
   const candidates = [];
 
   if (memberPhone && attTotals.has(memberPhone)) {
