@@ -758,6 +758,28 @@ function scanBillText() {
   billAudit = null;
   const attTotals = extractAttBillTotals(text);
 
+  // Auto-add any phone numbers from the bill that are not already members
+  let addedNewMembers = false;
+  attTotals.forEach((val, key) => {
+    const existing = activeMonth().members.find(m => last10Digits(m.phone) === key);
+    if (!existing) {
+      const formattedPhone = `(${key.slice(0, 3)}) ${key.slice(3, 6)}-${key.slice(6)}`;
+      const name = canonicalNamesByPhone[key] || `Line ${key}`;
+      const member = createMember({
+        name,
+        phone: formattedPhone,
+        due: val.amount
+      });
+      activeMonth().members.push(member);
+      addedNewMembers = true;
+    }
+  });
+
+  if (addedNewMembers) {
+    saveState();
+    render();
+  }
+
   activeMonth().members.forEach((member) => {
     const suggestion = suggestAmountForMember(member, lines, attTotals);
     if (!suggestion) return;
