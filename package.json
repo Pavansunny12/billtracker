@@ -1,0 +1,8 @@
+{
+  "name": "bill-collect",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "echo \"Bill Collect static app is ready\""
+  }
+}

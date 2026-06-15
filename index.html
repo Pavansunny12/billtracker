@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#f4f7f3">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Bill Collect">
+    <title>Bill Collect</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="apple-touch-icon" href="./icons/icon-192.svg">
+    <link rel="stylesheet" href="./styles.css?v=29">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">AT&amp;T family plan</p>
+          <h1>Bill Collect</h1>
+          <span class="sync-status" id="syncStatus">Local</span>
+        </div>
+        <button class="icon-button" id="newMonthButton" type="button" aria-label="Create next month" title="Create next month">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        </button>
+      </header>
+
+      <section class="month-strip" aria-label="Month selection">
+        <select id="monthSelect"></select>
+        <button class="quiet-button" id="renameMonthButton" type="button">Rename</button>
+      </section>
+
+      <section class="summary-band" aria-label="Collection summary">
+        <div class="summary-main">
+          <p class="section-kicker">Remaining</p>
+          <strong id="remainingAmount">$0.00</strong>
+          <span id="progressText">0 of 0 paid</span>
+        </div>
+        <div class="progress-ring" aria-hidden="true">
+          <svg viewBox="0 0 120 120">
+            <circle class="ring-bg" cx="60" cy="60" r="48"></circle>
+            <circle class="ring-fill" id="progressCircle" cx="60" cy="60" r="48"></circle>
+          </svg>
+          <b id="progressValue">0%</b>
+        </div>
+      </section>
+
+      <section class="stat-grid" aria-label="Totals">
+        <article>
+          <span>Total bill</span>
+          <strong id="totalBill">$0.00</strong>
+        </article>
+        <article>
+          <span>Collected</span>
+          <strong id="totalCollected">$0.00</strong>
+        </article>
+        <article>
+          <span>Pending</span>
+          <strong id="pendingCount">0</strong>
+        </article>
+      </section>
+
+      <section class="workflow-strip" aria-label="Month workflow">
+        <article>
+          <span>Month</span>
+          <strong id="workflowMonth">-</strong>
+        </article>
+        <article>
+          <span>Members</span>
+          <strong id="workflowMembers">0</strong>
+        </article>
+        <article>
+          <span>Pending</span>
+          <strong id="workflowPending">$0.00</strong>
+        </article>
+        <article>
+          <span>Status</span>
+          <strong id="workflowStatus">Open</strong>
+        </article>
+      </section>
+
+      <nav class="tabs" aria-label="App sections">
+        <button class="tab is-active" data-view="members" type="button">Members</button>
+        <button class="tab" data-view="history" type="button">History</button>
+        <button class="tab" data-view="pending" type="button">Pending</button>
+        <button class="tab" data-view="message" type="button">Message</button>
+        <button class="tab" data-view="import" type="button">Import</button>
+      </nav>
+
+      <section class="view is-active" id="view-members">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">This month</p>
+            <h2>Payment list</h2>
+          </div>
+          <label class="filter-toggle">
+            <input id="unpaidOnlyInput" type="checkbox">
+            <span>Unpaid only</span>
+          </label>
+        </div>
+        <div class="action-row">
+          <button class="quiet-button" id="addMemberButton" type="button">Add member</button>
+          <button class="quiet-button" id="exportMonthButton" type="button">Export month</button>
+        </div>
+        <div class="member-list" id="memberList"></div>
+      </section>
+
+      <section class="view" id="view-history">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Member history</p>
+            <h2>Person ledger</h2>
+          </div>
+        </div>
+        <label class="history-picker">
+          <span>Member</span>
+          <select id="historyMemberSelect"></select>
+        </label>
+        <section class="history-summary" aria-label="Member history totals">
+          <article>
+            <span>Total due</span>
+            <strong id="historyTotalDue">$0.00</strong>
+          </article>
+          <article>
+            <span>Total paid</span>
+            <strong id="historyTotalPaid">$0.00</strong>
+          </article>
+          <article>
+            <span>Pending</span>
+            <strong id="historyPending">$0.00</strong>
+          </article>
+        </section>
+        <div class="history-list" id="historyList"></div>
+      </section>
+
+      <section class="view" id="view-pending">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">Collect</p>
+            <h2>Who still owes</h2>
+          </div>
+          <button class="quiet-button" id="markRemindersButton" type="button">Mark sent</button>
+        </div>
+        <div class="pending-list" id="pendingList"></div>
+      </section>
+
+      <section class="view" id="view-message">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">WhatsApp</p>
+            <h2>Reminder text</h2>
+          </div>
+          <button class="text-button" id="copyMessageButton" type="button">Copy</button>
+        </div>
+        <textarea id="messageBox" rows="12" readonly></textarea>
+        <p class="helper-text" id="copyStatus">Copy this and paste it in your WhatsApp group.</p>
+      </section>
+
+      <section class="view" id="view-import">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">AI helper</p>
+            <h2>Scan bill and chat</h2>
+          </div>
+        </div>
+        <article class="import-panel">
+          <h3>AT&amp;T bill</h3>
+          <p>Upload a text-based bill or paste the bill text. The app suggests each person’s new amount by matching name or phone number.</p>
+          <input id="billFileInput" type="file" accept=".txt,.csv,.log,.pdf,application/pdf">
+          <textarea id="billTextInput" rows="8" placeholder="Paste bill text with name, phone, and amount..."></textarea>
+          <div class="button-row">
+            <button class="text-button" id="scanBillButton" type="button">Suggest amounts</button>
+            <button class="quiet-button" id="applyBillButton" type="button" disabled>Apply all</button>
+          </div>
+          <div class="detected-month" id="detectedMonthBox" hidden>
+            <span id="detectedMonthText"></span>
+            <button class="quiet-button" id="useDetectedMonthButton" type="button">Use month</button>
+          </div>
+          <div class="suggestion-list" id="billSuggestionList"></div>
+          <div class="audit-grid" id="billAuditSummary" hidden></div>
+        </article>
+        <article class="import-panel">
+          <h3>WhatsApp export</h3>
+          <p>Export chat from WhatsApp without media, then upload or paste it here. The app looks for paid, sent, done, Zelle, Venmo, and transferred.</p>
+          <input id="chatFileInput" type="file" accept=".txt,.log">
+          <textarea id="chatTextInput" rows="10" placeholder="Paste WhatsApp chat export..."></textarea>
+          <button class="text-button" id="scanChatButton" type="button">Scan messages</button>
+        </article>
+        <div class="review-panel">
+          <h3>Import results</h3>
+          <p id="importResults">Nothing scanned yet.</p>
+        </div>
+        <article class="import-panel">
+          <h3>Backup</h3>
+          <p>Save a backup before big changes, or restore a previous Bill Collect backup.</p>
+          <div class="button-row">
+            <button class="quiet-button" id="exportBackupButton" type="button">Export backup</button>
+            <label class="file-button">
+              <input id="importBackupInput" type="file" accept=".json,application/json">
+              Restore backup
+            </label>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <dialog id="monthDialog">
+      <form class="dialog-card" id="monthForm">
+        <header>
+          <div>
+            <p class="section-kicker">New bill month</p>
+            <h2>Create month</h2>
+          </div>
+          <button class="icon-button" id="closeMonthDialogButton" type="button" aria-label="Close create month">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </header>
+        <div class="dialog-grid">
+          <label>
+            <span>Month</span>
+            <select id="newMonthNameInput">
+              <option>January</option>
+              <option>February</option>
+              <option>March</option>
+              <option>April</option>
+              <option>May</option>
+              <option>June</option>
+              <option>July</option>
+              <option>August</option>
+              <option>September</option>
+              <option>October</option>
+              <option>November</option>
+              <option>December</option>
+            </select>
+          </label>
+          <label>
+            <span>Year</span>
+            <input id="newMonthYearInput" type="number" inputmode="numeric" min="2024" max="2035">
+          </label>
+        </div>
+        <label>
+          <span>Bill PDF or text file</span>
+          <input id="newMonthBillInput" type="file" accept=".txt,.csv,.log,.pdf,application/pdf">
+        </label>
+        <p class="helper-text" id="newMonthStatus">Choose the month. Adding a bill is optional.</p>
+        <menu>
+          <button class="quiet-button" id="cancelMonthButton" type="button">Cancel</button>
+          <button class="text-button" type="submit">Create</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <template id="memberTemplate">
+      <article class="member-card">
+        <div class="member-top">
+          <button class="check-button" type="button" aria-label="Toggle paid">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+          </button>
+          <div class="member-name">
+            <h3></h3>
+            <p></p>
+          </div>
+          <strong class="amount-due"></strong>
+        </div>
+        <div class="member-fields">
+          <label>
+            <span>Due</span>
+            <input class="due-input" type="number" inputmode="decimal" min="0" step="0.01">
+          </label>
+          <label>
+            <span>Received</span>
+            <input class="received-input" type="number" inputmode="decimal" min="0" step="0.01">
+          </label>
+          <label>
+            <span>Paid date</span>
+            <input class="date-input" type="date">
+          </label>
+          <label>
+            <span>Method</span>
+            <select class="method-input">
+              <option value="">None</option>
+              <option>Zelle</option>
+              <option>Venmo</option>
+              <option>Cash</option>
+              <option>Other</option>
+            </select>
+          </label>
+        </div>
+        <label class="notes-field">
+          <span>Notes</span>
+          <input class="notes-input" type="text" maxlength="80" placeholder="Optional">
+        </label>
+        <label class="reminder-row">
+          <input class="reminder-input" type="checkbox">
+          <span>Reminder sent</span>
+        </label>
+        <div class="card-actions">
+          <button class="quiet-button edit-member-button" type="button">Edit</button>
+          <button class="quiet-button remove-member-button" type="button">Remove</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="./app.js?v=29"></script>
+  </body>
+</html>
