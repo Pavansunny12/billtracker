@@ -1496,14 +1496,14 @@ syncFromServer();
   // Continuous slow movement animation for SVG displacement filter map (liquid glass flow)
   let offset = 0;
   function animateDisplacement() {
-    offset += 0.003;
-    const dispImg = document.querySelector("#liquid-glass-filter feImage");
-    if (dispImg) {
-      // Move map coordinate in a slow orbital path
-      const shiftX = Math.sin(offset) * 0.08;
-      const shiftY = Math.cos(offset) * 0.08;
-      dispImg.setAttribute("x", `${shiftX}`);
-      dispImg.setAttribute("y", `${shiftY}`);
+    offset += 0.035;
+    const noiseOffset = document.querySelector("#noise-offset");
+    if (noiseOffset) {
+      // Orbit the noise coordinates in a circular path
+      const shiftX = Math.sin(offset) * 12;
+      const shiftY = Math.cos(offset) * 12;
+      noiseOffset.setAttribute("dx", `${shiftX}`);
+      noiseOffset.setAttribute("dy", `${shiftY}`);
     }
     requestAnimationFrame(animateDisplacement);
   }
