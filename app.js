@@ -306,22 +306,22 @@ function renderSummary() {
   const month = activeMonth();
   const total = totals(month);
   const trackedMembers = month.members.filter((member) => !member.excluded);
-  els.remainingAmount.textContent = money(total.remaining);
-  els.progressText.textContent = `${total.paid} of ${trackedMembers.length} paid`;
-  els.progressCircle.style.strokeDashoffset = String(ringLength - ringLength * (total.percent / 100));
-  els.progressValue.textContent = `${total.percent}%`;
-  els.totalBill.textContent = money(total.totalDue);
-  els.ownerPaidAmount.textContent = money(total.ownerPaid);
-  els.collectibleAmount.textContent = money(total.collectible);
+  if (els.remainingAmount) els.remainingAmount.textContent = money(total.remaining);
+  if (els.progressText) els.progressText.textContent = `${total.paid} of ${trackedMembers.length} paid`;
+  if (els.progressCircle) els.progressCircle.style.strokeDashoffset = String(ringLength - ringLength * (total.percent / 100));
+  if (els.progressValue) els.progressValue.textContent = `${total.percent}%`;
+  if (els.totalBill) els.totalBill.textContent = money(total.totalDue);
+  if (els.ownerPaidAmount) els.ownerPaidAmount.textContent = money(total.ownerPaid);
+  if (els.collectibleAmount) els.collectibleAmount.textContent = money(total.collectible);
 }
 
 function renderWorkflow() {
   const month = activeMonth();
   const total = totals(month);
-  els.workflowMonth.textContent = month.label;
-  els.workflowCollected.textContent = money(total.collected);
-  els.workflowPaidCount.textContent = total.paid;
-  els.workflowPendingCount.textContent = total.pending;
+  if (els.workflowMonth) els.workflowMonth.textContent = month.label;
+  if (els.workflowCollected) els.workflowCollected.textContent = money(total.collected);
+  if (els.workflowPaidCount) els.workflowPaidCount.textContent = total.paid;
+  if (els.workflowPendingCount) els.workflowPendingCount.textContent = total.pending;
 }
 
 function renderMembers() {

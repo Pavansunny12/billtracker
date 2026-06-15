@@ -1,4 +1,4 @@
-const CACHE_NAME = "bill-collect-v11";
+const CACHE_NAME = "bill-collect-v12";
 const ASSETS = [
   "./",
   "./index.html",
@@ -27,8 +27,39 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET" || event.request.url.includes("/api/")) {
     return;
   }
+
+  const url = new URL(event.request.url);
+  // Network-First strategy for the root and index.html to avoid version caching locks
+  if (url.pathname === "/" || url.pathname.endsWith("/index.html")) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Stale-While-Revalidate for other static assets (js, css, manifest, icons)
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    caches.match(event.request).then((cached) => {
+      if (cached) {
+        // Fetch fresh version in background and update cache
+        fetch(event.request)
+          .then((response) => {
+            if (response.status === 200) {
+              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response));
+            }
+          })
+          .catch(() => {});
+        return cached;
+      }
+      return fetch(event.request);
+    })
   );
 });
-
