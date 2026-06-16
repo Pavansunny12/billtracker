@@ -1450,8 +1450,8 @@ els.monthSelect.addEventListener("change", () => {
   saveState();
   render();
 });
-els.historyMemberSelect.addEventListener("change", () => {
-  localStorage.setItem("bill-collect-history-member", els.historyMemberSelect.value);
+els.ledgerPendingOnly.addEventListener("change", () => {
+  localStorage.setItem("bill-collect-ledger-pending-only", els.ledgerPendingOnly.checked);
   renderHistory();
 });
 els.monthForm.addEventListener("submit", submitNewMonth);
