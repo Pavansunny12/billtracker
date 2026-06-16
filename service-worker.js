@@ -1,4 +1,4 @@
-const CACHE_NAME = "bill-collect-v14";
+const CACHE_NAME = "bill-collect-v15";
 const ASSETS = [
   "./",
   "./index.html",

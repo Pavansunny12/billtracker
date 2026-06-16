@@ -232,8 +232,8 @@ async function syncFromServer() {
       setSyncStatus("Saving...");
       await saveToServer();
     }
-  } catch {
-    setSyncStatus("Local only");
+  } catch (err) {
+    setSyncStatus(`Local (${err.message || err})`);
   }
 }
 
@@ -253,8 +253,8 @@ async function saveToServer() {
     if (!response.ok) throw new Error("save failed");
     const result = await response.json();
     setSyncStatus(result.ok ? "Synced" : "Local only");
-  } catch {
-    setSyncStatus("Local only");
+  } catch (err) {
+    setSyncStatus(`Local (${err.message || err})`);
   }
 }
 
