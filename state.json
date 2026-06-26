@@ -271,7 +271,7 @@
           "paid": true,
           "received": 28.82,
           "datePaid": "2026-06-26",
-          "method": "",
+          "method": "Zelle",
           "notes": "",
           "reminderSent": false,
           "excluded": false,
