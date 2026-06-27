@@ -411,7 +411,7 @@
           "paid": false,
           "received": 0,
           "datePaid": "",
-          "method": "",
+          "method": "Other",
           "notes": "",
           "reminderSent": false,
           "excluded": false,
