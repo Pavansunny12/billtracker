@@ -427,7 +427,7 @@
           "datePaid": "",
           "method": "",
           "notes": "",
-          "reminderSent": false,
+          "reminderSent": true,
           "excluded": false,
           "attName": ""
         },
