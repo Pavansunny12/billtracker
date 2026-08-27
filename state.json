@@ -885,7 +885,7 @@
           "paid": true,
           "received": 38.66,
           "datePaid": "2026-08-27",
-          "method": "",
+          "method": "Other",
           "notes": "",
           "reminderSent": false,
           "excluded": false,
