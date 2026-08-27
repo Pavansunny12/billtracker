@@ -815,7 +815,7 @@
           "paid": false,
           "received": 0,
           "datePaid": "",
-          "method": "",
+          "method": "Zelle",
           "notes": "",
           "reminderSent": false,
           "excluded": false,
