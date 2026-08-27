@@ -20,20 +20,6 @@
           "attName": "Pavan Gonuguntla"
         },
         {
-          "id": "b74c6b97-19ca-4dd6-9e4f-184097e352e0",
-          "name": "Revanth Gonuguntla",
-          "phone": "5133831240",
-          "due": 37.71,
-          "paid": false,
-          "received": 0,
-          "datePaid": "",
-          "method": "",
-          "notes": "Paid",
-          "reminderSent": false,
-          "excluded": true,
-          "attName": "Revanth Gonuguntla"
-        },
-        {
           "id": "e1f023c9-9062-4d08-aadb-55e6a9d07a09",
           "name": "Manasa Uppala",
           "phone": "2247136809",
