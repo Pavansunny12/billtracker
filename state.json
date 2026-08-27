@@ -28,7 +28,7 @@
           "received": 0,
           "datePaid": "",
           "method": "",
-          "notes": "",
+          "notes": "Paid",
           "reminderSent": false,
           "excluded": true,
           "attName": "Revanth Gonuguntla"
