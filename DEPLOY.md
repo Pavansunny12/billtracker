@@ -36,6 +36,14 @@ Once configured, the status will change to **"Synced"** and your history will be
 * `GITHUB_REPO`: `owner/repository-name` (defaults to `Pavansunny12/billtracker`)
 * `GITHUB_FILE_PATH`: `file-name.json` (defaults to `state.json`)
 
+**Required:** the API now rejects every request without the sync secret. Add one more variable:
+* **Key**: `SYNC_SECRET`
+* **Value**: the secret from the top of `app.js` (the `SYNC_SECRET` constant — keep the two in sync)
+
+> **Token scope (recommended):** instead of a classic token with full `repo` access, create a **fine-grained** personal access token limited to just the `billtracker` repository with **Contents: read & write**. If the token ever leaks, it can't touch your other repos. (Classic tokens can't be scoped down — use "Fine-grained tokens" under Developer settings.)
+
+> **If the secret leaks:** generate a new one, update `SYNC_SECRET` in both `app.js` and Vercel, then redeploy.
+
 ---
 
 ## 🚀 Step 3: Redeploy to Apply Changes

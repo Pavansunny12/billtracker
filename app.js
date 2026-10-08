@@ -1,24 +1,16 @@
 const STORAGE_KEY = "bill-collect-v1";
+
+// Sync secret: must match the SYNC_SECRET env var set on Vercel, otherwise
+// the API rejects every request. It lives in this file (a static site has
+// nowhere else to keep it), so it stops bots and casual abuse — not someone
+// reading your code. Rotate it in Vercel + here if it ever leaks.
+const SYNC_SECRET = "a3f2c8e1d4b5a6978e0f1d2c3b4a5968778695a4b3c2d1e0f9a8b7c6d5e4f3a2b1";
 const ringLength = 302;
 
-const starterMembers = [
-  { name: "Pavan Gonuguntla", phone: "3096609539", due: 35.92, excluded: true, attName: "Pavan Gonuguntla" },
-  { name: "Revanth Gonuguntla", phone: "5133831240", due: 37.71, excluded: true, attName: "Revanth Gonuguntla" },
-  { name: "Manasa Uppala", phone: "2247136809", due: 26.70, attName: "Manasa Uppala" },
-  { name: "Hanumanth Kuchi", phone: "4254948785", due: 50.48, attName: "New Line" },
-  { name: "Tarak Ram", phone: "4695454680", due: 59.08, attName: "Tarak Ram" },
-  { name: "Akhilesh Gourigari", phone: "5135936686", due: 34.20, attName: "Akhilesh Gourigari" },
-  { name: "Deepak Chada", phone: "8168599656", due: 66.02, attName: "Deepak Chada" },
-  { name: "Uday Yarlagadda", phone: "9379008382", due: 32.24, attName: "Uday Yarlagadda" },
-  { name: "Praneetha Chowdary", phone: "9379299558", due: 30.02, attName: "ATT Customer" },
-  { name: "Sindhu", phone: "2057570180", due: 35.59, attName: "Indhu G." },
-  { name: "Nithin Ravuri", phone: "2109865735", due: 33.21, attName: "Nithin Ravuri" },
-  { name: "Joshua Ebenezer", phone: "2672798757", due: 49.85, attName: "Joshua Ebenezer" },
-  { name: "Roshan Ambati", phone: "5132008454", due: 40.98, attName: "Roshan Ambati" },
-  { name: "Krishnakoushik Paisa", phone: "5132230636", due: 40.98, attName: "Krishnakoushik Paisa" },
-  { name: "Ajay Mannam", phone: "5139684224", due: 40.98, attName: "Ajay Mannam" },
-  { name: "Areef AT&T", phone: "6602385180", due: 71.33, attName: "Ashutosh Agnihotri" }
-];
+// Member names and phone numbers used to live here, hardcoded. They were
+// visible to anyone browsing the public repo, so they were removed — member
+// data now comes only from the synced state.json (or gets added in the app).
+const starterMembers = [];
 
 const canonicalNamesByPhone = {};
 
@@ -186,15 +178,17 @@ function normalizeState(parsed) {
         }))
     : [];
 
+  const rev = Number.isInteger(parsed.rev) && parsed.rev >= 0 ? parsed.rev : 0;
+
   if (!months.length) {
     const firstMonth = createMonth(monthLabel());
-    return { activeMonthId: firstMonth.id, months: [firstMonth] };
+    return { activeMonthId: firstMonth.id, months: [firstMonth], rev: 0 };
   }
 
   const activeMonthId = months.some((month) => month.id === parsed.activeMonthId)
     ? parsed.activeMonthId
     : months[0].id;
-  return { activeMonthId, months };
+  return { activeMonthId, months, rev };
 }
 
 function loadState() {
@@ -206,7 +200,7 @@ function loadState() {
     } catch {}
   }
   const firstMonth = createMonth(monthLabel());
-  return { activeMonthId: firstMonth.id, months: [firstMonth] };
+  return { activeMonthId: firstMonth.id, months: [firstMonth], rev: 0 };
 }
 
 function saveState() {
@@ -220,7 +214,14 @@ function setSyncStatus(text) {
 
 async function syncFromServer() {
   try {
-    const response = await fetch("./api/state", { cache: "no-store" });
+    const response = await fetch("./api/state", {
+      cache: "no-store",
+      headers: { "X-Sync-Secret": SYNC_SECRET }
+    });
+    if (response.status === 401) {
+      setSyncStatus("Sync locked — check SYNC_SECRET");
+      return;
+    }
     if (!response.ok) throw new Error("sync unavailable");
     const result = await response.json();
     if (result.ok && result.state?.months?.length) {
@@ -247,11 +248,31 @@ async function saveToServer() {
     setSyncStatus("Saving...");
     const response = await fetch("./api/state", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Sync-Secret": SYNC_SECRET },
       body: JSON.stringify(state)
     });
+    if (response.status === 401) {
+      setSyncStatus("Sync locked — check SYNC_SECRET");
+      return;
+    }
+    if (response.status === 409) {
+      // Another device saved newer changes after this one last synced.
+      // Pull those instead of silently overwriting them.
+      const result = await response.json().catch(() => null);
+      if (result && result.state?.months?.length) {
+        state = normalizeState(result.state);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        render();
+      }
+      setSyncStatus("Reloaded — newer changes from another device");
+      return;
+    }
     if (!response.ok) throw new Error("save failed");
     const result = await response.json();
+    if (result.ok && Number.isInteger(result.rev)) {
+      state.rev = result.rev;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
     setSyncStatus(result.ok ? "Synced" : "Local only");
   } catch (err) {
     setSyncStatus(`Local (${err.message || err})`);
