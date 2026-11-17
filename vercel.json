@@ -1,5 +1,55 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "builds": [
+    {
+      "src": "api/config.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/extract_pdf.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/payments.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/bill_ingest.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/months.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/summary.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/members.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "*.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "*.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "*.css",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "*.webmanifest",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "icons/*",
+      "use": "@vercel/static"
+    }
+  ],
   "cleanUrls": true,
   "headers": [
     {
