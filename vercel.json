@@ -1,9 +1,58 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "builds": [
+    {
+      "src": "api/config.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/extract_pdf.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/payments.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/bill_ingest.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/months.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "api/summary.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "*.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "*.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "*.css",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "*.webmanifest",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "icons/*",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "api/members.py",
+      "use": "@vercel/python"
+    }
+  ],
   "cleanUrls": true,
   "headers": [
     {
-      "source": "/(.*)",
       "headers": [
         {
           "key": "X-Content-Type-Options",
@@ -13,21 +62,53 @@
           "key": "Referrer-Policy",
           "value": "strict-origin-when-cross-origin"
         }
-      ]
+      ],
+      "source": "/(.*)"
     }
   ],
-  "builds": [
-    { "src": "api/extract_pdf.py", "use": "@vercel/python" },
-    { "src": "api/state.py", "use": "@vercel/python" },
-    { "src": "*.html", "use": "@vercel/static" },
-    { "src": "*.js", "use": "@vercel/static" },
-    { "src": "*.css", "use": "@vercel/static" },
-    { "src": "*.webmanifest", "use": "@vercel/static" },
-    { "src": "icons/*", "use": "@vercel/static" }
-  ],
   "routes": [
-    { "src": "/api/extract_pdf", "dest": "api/extract_pdf.py" },
-    { "src": "/api/state", "dest": "api/state.py" },
-    { "handle": "filesystem" }
+    {
+      "dest": "api/config.py",
+      "src": "/api/config"
+    },
+    {
+      "dest": "api/extract_pdf.py",
+      "src": "/api/extract_pdf"
+    },
+    {
+      "dest": "api/payments.py",
+      "src": "/api/payments/(.*)"
+    },
+    {
+      "dest": "api/payments.py",
+      "src": "/api/payments"
+    },
+    {
+      "dest": "api/bill_ingest.py",
+      "src": "/api/bill_ingest"
+    },
+    {
+      "dest": "api/members.py",
+      "src": "/api/members"
+    },
+    {
+      "dest": "api/members.py",
+      "src": "/api/members/(.*)"
+    },
+    {
+      "dest": "api/months.py",
+      "src": "/api/months/(.*)"
+    },
+    {
+      "dest": "api/months.py",
+      "src": "/api/months"
+    },
+    {
+      "dest": "api/summary.py",
+      "src": "/api/summary"
+    },
+    {
+      "handle": "filesystem"
+    }
   ]
 }

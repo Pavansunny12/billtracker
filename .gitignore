@@ -7,3 +7,7 @@ server.py
 .DS_Store
 .vercel/
 .vercel
+# Secrets and generated files containing member PII — never commit.
+.env
+.env.*
+db/migrated.sql

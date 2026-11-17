@@ -1,30 +1,40 @@
 const STORAGE_KEY = "bill-collect-v1";
+
+// Auth: there is NO secret in this file any more. The old SYNC_SECRET
+// was hardcoded here, so anyone reading the page source could copy
+// it. The browser signs in with Supabase Auth (email + password, see
+// signIn() below) and sends the Supabase session token (Bearer) with
+// every server call; the server verifies that token (api/_lib.py)
+// before honouring the request. The agent key (X-Agent-Key) is sent
+// only by the Muse cron, server-side, and never appears in client
+// code. The Supabase project URL + anon key come from ./api/config
+// (server env vars) — never hardcoded here.
+const SESSION_KEY = "bill-collect-session";
+const REFRESH_KEY = "bill-collect-refresh";
+const USER_KEY = "bill-collect-user";
+const EXPIRES_KEY = "bill-collect-expires-at";
 const ringLength = 302;
 
-const starterMembers = [
-  { name: "Pavan Gonuguntla", phone: "3096609539", due: 35.92, excluded: true, attName: "Pavan Gonuguntla" },
-  { name: "Revanth Gonuguntla", phone: "5133831240", due: 37.71, excluded: true, attName: "Revanth Gonuguntla" },
-  { name: "Manasa Uppala", phone: "2247136809", due: 26.70, attName: "Manasa Uppala" },
-  { name: "Hanumanth Kuchi", phone: "4254948785", due: 50.48, attName: "New Line" },
-  { name: "Tarak Ram", phone: "4695454680", due: 59.08, attName: "Tarak Ram" },
-  { name: "Akhilesh Gourigari", phone: "5135936686", due: 34.20, attName: "Akhilesh Gourigari" },
-  { name: "Deepak Chada", phone: "8168599656", due: 66.02, attName: "Deepak Chada" },
-  { name: "Uday Yarlagadda", phone: "9379008382", due: 32.24, attName: "Uday Yarlagadda" },
-  { name: "Praneetha Chowdary", phone: "9379299558", due: 30.02, attName: "ATT Customer" },
-  { name: "Sindhu", phone: "2057570180", due: 35.59, attName: "Indhu G." },
-  { name: "Nithin Ravuri", phone: "2109865735", due: 33.21, attName: "Nithin Ravuri" },
-  { name: "Joshua Ebenezer", phone: "2672798757", due: 49.85, attName: "Joshua Ebenezer" },
-  { name: "Roshan Ambati", phone: "5132008454", due: 40.98, attName: "Roshan Ambati" },
-  { name: "Krishnakoushik Paisa", phone: "5132230636", due: 40.98, attName: "Krishnakoushik Paisa" },
-  { name: "Ajay Mannam", phone: "5139684224", due: 40.98, attName: "Ajay Mannam" },
-  { name: "Areef AT&T", phone: "6602385180", due: 71.33, attName: "Ashutosh Agnihotri" }
-];
+// Member names and phone numbers used to live here, hardcoded. They were
+// visible to anyone browsing the public repo, so they were removed — member
+// data now comes only from the synced state.json (or gets added in the app).
+const starterMembers = [];
 
 const canonicalNamesByPhone = {};
 
 const els = {
   monthSelect: document.querySelector("#monthSelect"),
   syncStatus: document.querySelector("#syncStatus"),
+  signInButton: document.querySelector("#signInButton"),
+  signOutButton: document.querySelector("#signOutButton"),
+  authEmail: document.querySelector("#authEmail"),
+  loginDialog: document.querySelector("#loginDialog"),
+  loginForm: document.querySelector("#loginForm"),
+  loginEmailInput: document.querySelector("#loginEmailInput"),
+  loginPasswordInput: document.querySelector("#loginPasswordInput"),
+  loginError: document.querySelector("#loginError"),
+  closeLoginDialogButton: document.querySelector("#closeLoginDialogButton"),
+  cancelLoginButton: document.querySelector("#cancelLoginButton"),
   newMonthButton: document.querySelector("#newMonthButton"),
   monthDialog: document.querySelector("#monthDialog"),
   monthForm: document.querySelector("#monthForm"),
@@ -82,7 +92,6 @@ let state = loadState();
 let billSuggestions = [];
 let billAudit = null;
 let detectedBillMonth = "";
-let saveTimer = 0;
 let expandedLedgerKeys = new Set();
 
 function makeId() {
@@ -130,7 +139,11 @@ function createMember(member) {
     notes: member.notes || "",
     reminderSent: Boolean(member.reminderSent),
     excluded: Boolean(member.excluded),
-    attName: member.attName || ""
+    attName: member.attName || "",
+    paymentStatus: member.paymentStatus || "",
+    lastUpdatedBy: member.lastUpdatedBy || "",
+    lastPaymentId: member.lastPaymentId || "",
+    draft: Boolean(member.draft)
   };
 }
 
@@ -150,7 +163,11 @@ function normalizeMember(member) {
     notes: member.notes || "",
     reminderSent: Boolean(member.reminderSent),
     excluded: Boolean(member.excluded),
-    attName: member.attName || ""
+    attName: member.attName || "",
+    paymentStatus: member.paymentStatus || "",
+    lastUpdatedBy: member.lastUpdatedBy || "",
+    lastPaymentId: member.lastPaymentId || "",
+    draft: Boolean(member.draft)
   };
 }
 
@@ -182,19 +199,24 @@ function normalizeState(parsed) {
         .map((month) => ({
           id: month.id || makeId(),
           label: month.label || monthLabel(),
+          status: month.status || "active",
+          billTotal: month.billTotal,
+          dueDate: month.dueDate,
           members: month.members.map(normalizeMember)
         }))
     : [];
 
+  const rev = Number.isInteger(parsed.rev) && parsed.rev >= 0 ? parsed.rev : 0;
+
   if (!months.length) {
     const firstMonth = createMonth(monthLabel());
-    return { activeMonthId: firstMonth.id, months: [firstMonth] };
+    return { activeMonthId: firstMonth.id, months: [firstMonth], rev: 0 };
   }
 
   const activeMonthId = months.some((month) => month.id === parsed.activeMonthId)
     ? parsed.activeMonthId
     : months[0].id;
-  return { activeMonthId, months };
+  return { activeMonthId, months, rev };
 }
 
 function loadState() {
@@ -206,55 +228,397 @@ function loadState() {
     } catch {}
   }
   const firstMonth = createMonth(monthLabel());
-  return { activeMonthId: firstMonth.id, months: [firstMonth] };
-}
-
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  queueServerSave();
+  return { activeMonthId: firstMonth.id, months: [firstMonth], rev: 0 };
 }
 
 function setSyncStatus(text) {
   els.syncStatus.textContent = text;
 }
 
-async function syncFromServer() {
+// ---------------------------------------------------------------------------
+// Server API (Supabase-backed, see api/*.py).
+// Supabase is the source of truth. localStorage is ONLY an offline
+// cache: it makes the app open instantly and keeps working offline,
+// but on every load the server wins. There is no whole-state sync
+// any more — edits go to the server one payment / one line at a time.
+// ---------------------------------------------------------------------------
+
+function sessionToken() {
   try {
-    const response = await fetch("./api/state", { cache: "no-store" });
-    if (!response.ok) throw new Error("sync unavailable");
-    const result = await response.json();
-    if (result.ok && result.state?.months?.length) {
-      state = normalizeState(result.state);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      render();
-      setSyncStatus("Synced");
-    } else {
-      setSyncStatus("Saving...");
-      await saveToServer();
-    }
-  } catch (err) {
-    setSyncStatus(`Local (${err.message || err})`);
+    return localStorage.getItem(SESSION_KEY) || "";
+  } catch {
+    return "";
   }
 }
 
-function queueServerSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveToServer, 450);
+// ---------------------------------------------------------------------------
+// Sign-in (Supabase Auth, email + password).
+// The Supabase URL + anon key come from ./api/config, which reads them
+// from the server's env vars. The anon key is publishable by design;
+// the service key never reaches the browser. The session's access
+// token is stored under SESSION_KEY, exactly as the API calls expect.
+// Expiry is only checked client-side to know when to refresh — the
+// server re-verifies the token on every request, so a tampered or
+// expired token here buys nothing.
+// ---------------------------------------------------------------------------
+
+let authConfig = null;
+
+async function loadAuthConfig() {
+  if (authConfig) return authConfig;
+  try {
+    const response = await fetch("./api/config", { cache: "no-store" });
+    const result = await response.json().catch(() => ({}));
+    authConfig = result.configured
+      ? { url: result.supabase_url, anonKey: result.anon_key }
+      : null;
+  } catch {
+    authConfig = null;
+  }
+  return authConfig;
 }
 
-async function saveToServer() {
+function jwtExpiryMs(token) {
   try {
-    setSyncStatus("Saving...");
-    const response = await fetch("./api/state", {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload.exp === "number" ? payload.exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function sessionEmail() {
+  try {
+    return localStorage.getItem(USER_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function saveSession(data) {
+  try {
+    localStorage.setItem(SESSION_KEY, data.access_token || "");
+    if (data.refresh_token) localStorage.setItem(REFRESH_KEY, data.refresh_token);
+    if (data.user?.email) localStorage.setItem(USER_KEY, data.user.email);
+    if (data.expires_in) {
+      localStorage.setItem(EXPIRES_KEY, String(Date.now() + data.expires_in * 1000));
+    }
+  } catch {}
+}
+
+function clearSession() {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(EXPIRES_KEY);
+  } catch {}
+}
+
+function updateAuthUI() {
+  const signedIn = Boolean(sessionToken());
+  if (els.signInButton) els.signInButton.hidden = signedIn;
+  if (els.signOutButton) els.signOutButton.hidden = !signedIn;
+  if (els.authEmail) {
+    els.authEmail.hidden = !signedIn;
+    els.authEmail.textContent = signedIn ? sessionEmail() : "";
+    els.authEmail.title = signedIn ? `Signed in as ${sessionEmail()}` : "";
+  }
+}
+
+function openLoginDialog(message) {
+  if (els.loginError) {
+    els.loginError.hidden = !message;
+    els.loginError.textContent = message || "";
+  }
+  if (els.loginDialog && !els.loginDialog.open) els.loginDialog.showModal();
+}
+
+function closeLoginDialog() {
+  if (els.loginDialog?.open) els.loginDialog.close();
+}
+
+async function signIn(email, password) {
+  const config = await loadAuthConfig();
+  if (!config) throw new Error("Sign-in is not configured on the server yet.");
+  const response = await fetch(`${config.url}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { apikey: config.anonKey, "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result.error_description || result.msg || "Sign-in failed. Check your email and password.");
+  }
+  saveSession(result);
+  updateAuthUI();
+}
+
+async function refreshSession() {
+  const config = await loadAuthConfig();
+  let refreshToken = "";
+  try {
+    refreshToken = localStorage.getItem(REFRESH_KEY) || "";
+  } catch {}
+  if (!config || !refreshToken) return false;
+  try {
+    const response = await fetch(`${config.url}/auth/v1/token?grant_type=refresh_token`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(state)
+      headers: { apikey: config.anonKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken })
     });
-    if (!response.ok) throw new Error("save failed");
-    const result = await response.json();
-    setSyncStatus(result.ok ? "Synced" : "Local only");
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.access_token) return false;
+    saveSession(result);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function signOut() {
+  const config = await loadAuthConfig();
+  const token = sessionToken();
+  if (config && token) {
+    try {
+      await fetch(`${config.url}/auth/v1/logout`, {
+        method: "POST",
+        headers: { apikey: config.anonKey, Authorization: "Bearer " + token }
+      });
+    } catch {}
+  }
+  clearSession();
+  updateAuthUI();
+  loadMonthsFromServer();
+}
+
+async function submitLogin(event) {
+  event.preventDefault();
+  const email = els.loginEmailInput.value.trim();
+  const password = els.loginPasswordInput.value;
+  if (!email || !password) return;
+  const submitButton = els.loginForm.querySelector("button[type='submit']");
+  if (submitButton) submitButton.disabled = true;
+  try {
+    await signIn(email, password);
+    closeLoginDialog();
+    setSyncStatus("Signed in");
+    loadMonthsFromServer();
   } catch (err) {
-    setSyncStatus(`Local (${err.message || err})`);
+    openLoginDialog(err.message || "Sign-in failed.");
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Runs once at boot: refresh an expired session if possible, then
+// show the sign-in dialog when there is no usable session. The app
+// still works offline from its local cache when the dialog is closed
+// without signing in.
+async function initAuth() {
+  updateAuthUI();
+  const token = sessionToken();
+  if (token) {
+    const expiresAt = Number(localStorage.getItem(EXPIRES_KEY) || jwtExpiryMs(token) || 0);
+    if (expiresAt && Date.now() > expiresAt - 60000) {
+      const refreshed = await refreshSession();
+      updateAuthUI();
+      if (!refreshed) {
+        clearSession();
+        updateAuthUI();
+        openLoginDialog();
+        return false;
+      }
+    }
+    return true;
+  }
+  openLoginDialog();
+  return false;
+}
+
+function apiHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  const token = sessionToken();
+  if (token) headers["Authorization"] = "Bearer " + token;
+  return headers;
+}
+
+async function apiGet(path) {
+  const response = await fetch(path, { cache: "no-store", headers: apiHeaders() });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(result.error || "request failed");
+    error.status = response.status;
+    throw error;
+  }
+  return result;
+}
+
+async function apiPost(path, body) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: apiHeaders(),
+    body: JSON.stringify(body)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(result.error || "request failed");
+    error.status = response.status;
+    error.result = result;
+    throw error;
+  }
+  return result;
+}
+
+function cacheState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+}
+
+// Local cache only. Server writes happen in the mutation functions
+// below (postPayment / postLine / createMonthOnServer), one record
+// at a time — never a whole-state upload.
+function saveState() {
+  cacheState();
+}
+
+function serverMonthToLocal(view) {
+  return {
+    id: view.id,
+    label: view.label,
+    status: view.status,
+    billTotal: view.bill_total,
+    dueDate: view.due_date,
+    members: (view.members || []).map((m) => normalizeMember({
+      id: m.id,
+      name: m.name,
+      phone: m.phone,
+      due: m.due,
+      paid: m.paid,
+      received: m.received,
+      datePaid: m.datePaid,
+      method: m.method,
+      notes: m.notes,
+      reminderSent: m.reminderSent,
+      excluded: m.excluded,
+      attName: m.attName,
+      paymentStatus: m.paymentStatus,
+      lastUpdatedBy: m.lastUpdatedBy,
+      lastPaymentId: m.lastPaymentId,
+      draft: m.draft
+    }))
+  };
+}
+
+async function loadMonthsFromServer() {
+  try {
+    const list = await apiGet("./api/months");
+    const months = [];
+    for (const summary of list.months || []) {
+      const full = await apiGet(`./api/months/${summary.id}`);
+      if (full.month) months.push(serverMonthToLocal(full.month));
+    }
+    if (months.length) {
+      const previousActive = state.activeMonthId;
+      state = {
+        activeMonthId: months.some((m) => m.id === previousActive)
+          ? previousActive
+          : months[months.length - 1].id,
+        months,
+        rev: 0
+      };
+      cacheState();
+      render();
+      renderAgentStatus();
+      setSyncStatus("Synced");
+    } else {
+      setSyncStatus("Synced — no months on server yet");
+    }
+  } catch (err) {
+    if (err.status === 401) {
+      setSyncStatus("Sign in required");
+    } else {
+      setSyncStatus("Local only — server unreachable");
+    }
+  }
+}
+
+function renderAgentStatus() {
+  const badge = document.querySelector("#draftBadge");
+  if (!badge) return;
+  const hasDraft = state.months.some((m) => m.status === "draft")
+    || state.months.some((m) => m.members.some((x) => x.paymentStatus === "pending"));
+  badge.hidden = !hasDraft;
+}
+
+// One payment to the server. source_id is the idempotency key:
+// re-sending the same payment returns the existing row, it never
+// double-counts. Returns the server payment, or null on failure
+// (the local change is kept and the status line explains why).
+async function postPayment(member, { amount, datePaid, method, source, sourceId, status }) {
+  try {
+    const result = await apiPost("./api/payments", {
+      member_id: member.id,
+      month_id: activeMonth().id,
+      amount,
+      date_paid: datePaid || todayValue(),
+      method: method || "Other",
+      source,
+      source_id: sourceId,
+      status: status || "confirmed"
+    });
+    if (result.payment?.id) member.lastPaymentId = result.payment.id;
+    if (result.payment?.created_by) member.lastUpdatedBy = result.payment.created_by;
+    setSyncStatus("Synced");
+    return result.payment || null;
+  } catch (err) {
+    setSyncStatus(err.status === 401 ? "Sign in required" : "Saved on this device — server unreachable");
+    return null;
+  }
+}
+
+async function postLine(member, patch) {
+  try {
+    await apiPost(`./api/months/${activeMonth().id}/lines`, { member_id: member.id, ...patch });
+    setSyncStatus("Synced");
+    return true;
+  } catch (err) {
+    setSyncStatus(err.status === 401 ? "Sign in required" : "Saved on this device — server unreachable");
+    return false;
+  }
+}
+
+async function voidPayment(member) {
+  if (!member.lastPaymentId) return false;
+  try {
+    await apiPost(`./api/payments/${member.lastPaymentId}/void`, {});
+    setSyncStatus("Synced");
+    return true;
+  } catch (err) {
+    setSyncStatus(err.status === 401 ? "Sign in required" : "Saved on this device — server unreachable");
+    return false;
+  }
+}
+
+async function createMonthOnServer(month) {
+  try {
+    const result = await apiPost("./api/months", {
+      id: month.id,
+      label: month.label,
+      bill_total: month.members.reduce((s, m) => s + Number(m.due || 0), 0),
+      status: "active",
+      lines: month.members.map((m) => ({
+        member_id: m.id,
+        phone: m.phone,
+        amount: Number(m.due || 0),
+        excluded: Boolean(m.excluded)
+      }))
+    });
+    return result.month || null;
+  } catch (err) {
+    setSyncStatus(err.status === 401 ? "Sign in required" : "Saved on this device — server unreachable");
+    return null;
   }
 }
 
@@ -338,6 +702,35 @@ function renderMembers() {
     node.classList.toggle("is-excluded", member.excluded);
     node.querySelector("h3").textContent = member.name;
     node.querySelector("p").textContent = member.phone;
+    // Agent provenance: show where a payment came from, and let Sunny
+    // undo a payment Muse recorded (voids it server-side).
+    if (member.draft || member.paymentStatus === "pending" || member.lastUpdatedBy === "muse") {
+      const badge = document.createElement("span");
+      badge.className = "muse-badge";
+      badge.textContent = member.paymentStatus === "pending"
+        ? "Muse • pending review"
+        : member.draft ? "Draft" : "Muse";
+      node.querySelector(".member-name").appendChild(badge);
+    }
+    if (member.lastUpdatedBy === "muse" && member.lastPaymentId) {
+      const undoButton = document.createElement("button");
+      undoButton.className = "quiet-button";
+      undoButton.type = "button";
+      undoButton.textContent = "Undo";
+      undoButton.title = "Undo the payment Muse recorded";
+      undoButton.addEventListener("click", async () => {
+        if (!confirm(`Undo ${member.name}'s payment recorded by Muse?`)) return;
+        if (await voidPayment(member)) {
+          member.paid = false;
+          member.received = 0;
+          member.datePaid = "";
+          member.lastPaymentId = "";
+          saveState();
+          render();
+        }
+      });
+      node.querySelector(".card-actions").appendChild(undoButton);
+    }
     node.querySelector(".amount-due").textContent = money(member.due);
 
     const checkButton = node.querySelector(".check-button");
@@ -390,7 +783,7 @@ function renderMembers() {
   }
 }
 
-function addMember() {
+async function addMember() {
   const name = prompt("Member name");
   if (!name?.trim()) return;
   const phone = prompt("Phone number", "") || "";
@@ -402,12 +795,25 @@ function addMember() {
     canonicalNamesByPhone[digits] = cleanedName;
   }
   const member = createMember({ name: cleanedName, phone: cleanedPhone, due: Math.max(due, 0) });
+  try {
+    const created = await apiPost("./api/members", { name: cleanedName, phone: cleanedPhone });
+    if (created.member?.id) member.id = created.member.id;
+    await apiPost(`./api/months/${activeMonth().id}/lines`, {
+      member_id: member.id,
+      due: member.due,
+      notes: "",
+      reminder_sent: false,
+      excluded: false
+    });
+  } catch {
+    setSyncStatus("Saved on this device — server unreachable");
+  }
   activeMonth().members.push(member);
   saveState();
   render();
 }
 
-function editMember(id) {
+async function editMember(id) {
   const member = activeMonth().members.find((entry) => entry.id === id);
   if (!member) return;
   const name = prompt("Member name", member.name);
@@ -429,14 +835,20 @@ function editMember(id) {
       entry.phone = newPhone;
     });
   });
+  try {
+    await apiPost(`./api/members/${member.id}`, { name: newName, phone: newPhone });
+  } catch {
+    setSyncStatus("Saved on this device — server unreachable");
+  }
   saveState();
   render();
 }
 
-function removeMember(id) {
+async function removeMember(id) {
   const member = activeMonth().members.find((entry) => entry.id === id);
   if (!member) return;
   if (!confirm(`Remove ${member.name} from ${activeMonth().label}?`)) return;
+  await postLine(member, { remove: true });
   activeMonth().members = activeMonth().members.filter((entry) => entry.id !== id);
   saveState();
   render();
@@ -674,33 +1086,71 @@ function renderMessage() {
   els.messageBox.value = lines.join("\n");
 }
 
-function togglePaid(id) {
+async function togglePaid(id) {
   const member = activeMonth().members.find((entry) => entry.id === id);
   if (!member) return;
   member.paid = !member.paid;
   if (member.paid) {
     member.received = Number(member.due || 0);
     member.datePaid ||= todayValue();
+    await postPayment(member, {
+      amount: member.received,
+      datePaid: member.datePaid,
+      method: member.method || "Zelle",
+      source: "app",
+      sourceId: `app-paid:${activeMonth().id}:${member.id}`
+    });
   } else {
     member.received = 0;
     member.datePaid = "";
+    await voidPayment(member);
   }
   saveState();
   render();
 }
 
-function updateMember(id, patch) {
+async function updateMember(id, patch) {
   const member = activeMonth().members.find((entry) => entry.id === id);
   if (!member) return;
   Object.assign(member, patch);
   if (patch.due !== undefined) {
     member.due = Math.max(Number(member.due || 0), 0);
     if (member.paid) member.received = member.due;
+    await postLine(member, { due: member.due });
   }
   if (patch.received !== undefined) {
     member.received = Math.max(Number(member.received || 0), 0);
     member.paid = member.received >= Number(member.due || 0) && Number(member.due || 0) > 0;
     if (member.paid) member.datePaid ||= todayValue();
+    // The manual payment record is keyed app-manual:<month>:<member>,
+    // so re-saving the same received amount returns the existing
+    // row instead of double-counting; changing it corrects it.
+    if (member.received > 0) {
+      await postPayment(member, {
+        amount: member.received,
+        datePaid: member.datePaid,
+        method: member.method || "Other",
+        source: "app",
+        sourceId: `app-manual:${activeMonth().id}:${member.id}`
+      });
+    } else if (member.lastPaymentId) {
+      await voidPayment(member);
+    }
+  }
+  if ((patch.method !== undefined || patch.datePaid !== undefined) && member.received > 0) {
+    await postPayment(member, {
+      amount: member.received,
+      datePaid: member.datePaid,
+      method: member.method || "Other",
+      source: "app",
+      sourceId: `app-manual:${activeMonth().id}:${member.id}`
+    });
+  }
+  if (patch.notes !== undefined || patch.reminderSent !== undefined) {
+    await postLine(member, {
+      ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+      ...(patch.reminderSent !== undefined ? { reminder_sent: patch.reminderSent } : {})
+    });
   }
   saveState();
   render();
@@ -751,6 +1201,7 @@ async function submitNewMonth(event) {
   saveState();
   render();
   closeMonthDialog();
+  createMonthOnServer(month);
 
   const file = els.newMonthBillInput.files?.[0];
   if (file) {
@@ -801,11 +1252,16 @@ function nextMonthParts(label) {
   return { month: monthNames[now.getMonth()], year: now.getFullYear() };
 }
 
-function renameMonth() {
+async function renameMonth() {
   const month = activeMonth();
   const label = prompt("Month name", month.label);
   if (!label) return;
   month.label = label.trim();
+  try {
+    await apiPost(`./api/months/${month.id}`, { label: month.label });
+  } catch {
+    setSyncStatus("Saved on this device — server unreachable");
+  }
   saveState();
   render();
 }
@@ -825,10 +1281,13 @@ async function copyMessage() {
   }
 }
 
-function markRemindersSent() {
-  activeMonth().members.forEach((member) => {
-    if (!member.paid) member.reminderSent = true;
-  });
+async function markRemindersSent() {
+  for (const member of activeMonth().members) {
+    if (!member.paid) {
+      member.reminderSent = true;
+      await postLine(member, { reminder_sent: true });
+    }
+  }
   saveState();
   render();
 }
@@ -1232,6 +1691,7 @@ function useDetectedMonth() {
   saveState();
   render();
   renderDetectedMonth();
+  createMonthOnServer(month);
   scanBillText();
 }
 
@@ -1264,6 +1724,7 @@ function applySuggestion(suggestion) {
   if (!member) return false;
   member.due = suggestion.newAmount;
   if (member.paid) member.received = suggestion.newAmount;
+  postLine(member, { due: suggestion.newAmount });
   return true;
 }
 
@@ -1348,6 +1809,15 @@ function scanChatText() {
     member.method = detectMethod(line, member.method);
     member.notes = sender ? `Matched WhatsApp: ${sender}` : "Matched WhatsApp message";
     matched.push(`${member.name} on ${member.datePaid}`);
+    // Server ingest is preferred, but the client scan stays as a
+    // fallback for when Sunny pastes an export by hand.
+    postPayment(member, {
+      amount: member.received,
+      datePaid: member.datePaid,
+      method: member.method,
+      source: "whatsapp-export",
+      sourceId: `wa:${activeMonth().id}:${member.id}:${member.datePaid}:${member.received}`
+    });
   });
 
   saveState();
@@ -1392,9 +1862,12 @@ async function extractFileText(file) {
   if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
     els.importResults.textContent = "Extracting PDF text...";
     try {
+      const pdfHeaders = { "Content-Type": "application/pdf" };
+      const token = sessionToken();
+      if (token) pdfHeaders["Authorization"] = "Bearer " + token;
       const response = await fetch("./api/extract_pdf", {
         method: "POST",
-        headers: { "Content-Type": "application/pdf" },
+        headers: pdfHeaders,
         body: file
       });
       const result = await response.json();
@@ -1407,7 +1880,9 @@ async function extractFileText(file) {
       els.importResults.textContent = `PDF text extracted${pageText}. Tap Suggest amounts to review the new bill amounts.`;
       return result.text;
     } catch (error) {
-      els.importResults.textContent = `PDF could not be read here: ${error.message}. Use the Bill Collect backend URL or paste the bill text.`;
+      els.importResults.textContent = error.status === 401
+        ? "Sign in required to extract PDFs. Paste the bill text instead."
+        : `PDF could not be read here: ${error.message}. Use the Bill Collect backend URL or paste the bill text.`;
       return "";
     }
   }
@@ -1455,6 +1930,14 @@ els.ledgerPendingOnly.addEventListener("change", () => {
   renderHistory();
 });
 els.monthForm.addEventListener("submit", submitNewMonth);
+els.loginForm.addEventListener("submit", submitLogin);
+els.signInButton.addEventListener("click", () => openLoginDialog());
+els.signOutButton.addEventListener("click", signOut);
+els.closeLoginDialogButton.addEventListener("click", closeLoginDialog);
+els.cancelLoginButton.addEventListener("click", closeLoginDialog);
+els.loginDialog.addEventListener("click", (event) => {
+  if (event.target === els.loginDialog) closeLoginDialog();
+});
 els.closeMonthDialogButton.addEventListener("click", closeMonthDialog);
 els.cancelMonthButton.addEventListener("click", closeMonthDialog);
 els.monthDialog.addEventListener("click", (event) => {
@@ -1483,7 +1966,7 @@ if ("serviceWorker" in navigator && window.isSecureContext) {
 }
 
 render();
-syncFromServer();
+initAuth().then(() => loadMonthsFromServer());
 
 // Liquid Glass Interactive Engine
 {
