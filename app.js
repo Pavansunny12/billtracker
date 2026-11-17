@@ -1,10 +1,14 @@
 const STORAGE_KEY = "bill-collect-v1";
 
-// Sync secret: must match the SYNC_SECRET env var set on Vercel, otherwise
-// the API rejects every request. It lives in this file (a static site has
-// nowhere else to keep it), so it stops bots and casual abuse — not someone
-// reading your code. Rotate it in Vercel + here if it ever leaks.
-const SYNC_SECRET = "a3f2c8e1d4b5a6978e0f1d2c3b4a5968778695a4b3c2d1e0f9a8b7c6d5e4f3a2b1";
+// Auth: there is NO secret in this file any more. The old SYNC_SECRET
+// was hardcoded here, so anyone reading the page source could copy
+// it. The browser now sends a Supabase session token (Bearer) when
+// Sunny is signed in; the agent key (X-Agent-Key) is sent only by
+// the Muse cron, server-side, and never appears in client code.
+// TODO: wire Supabase Auth login UI and store the session token
+// under SESSION_KEY. Until then, server calls return 401 and the
+// app works from its localStorage cache, shown as "Sign in required".
+const SESSION_KEY = "bill-collect-session";
 const ringLength = 302;
 
 // Member names and phone numbers used to live here, hardcoded. They were
@@ -74,7 +78,6 @@ let state = loadState();
 let billSuggestions = [];
 let billAudit = null;
 let detectedBillMonth = "";
-let saveTimer = 0;
 let expandedLedgerKeys = new Set();
 
 function makeId() {
@@ -122,7 +125,11 @@ function createMember(member) {
     notes: member.notes || "",
     reminderSent: Boolean(member.reminderSent),
     excluded: Boolean(member.excluded),
-    attName: member.attName || ""
+    attName: member.attName || "",
+    paymentStatus: member.paymentStatus || "",
+    lastUpdatedBy: member.lastUpdatedBy || "",
+    lastPaymentId: member.lastPaymentId || "",
+    draft: Boolean(member.draft)
   };
 }
 
@@ -142,7 +149,11 @@ function normalizeMember(member) {
     notes: member.notes || "",
     reminderSent: Boolean(member.reminderSent),
     excluded: Boolean(member.excluded),
-    attName: member.attName || ""
+    attName: member.attName || "",
+    paymentStatus: member.paymentStatus || "",
+    lastUpdatedBy: member.lastUpdatedBy || "",
+    lastPaymentId: member.lastPaymentId || "",
+    draft: Boolean(member.draft)
   };
 }
 
@@ -174,6 +185,9 @@ function normalizeState(parsed) {
         .map((month) => ({
           id: month.id || makeId(),
           label: month.label || monthLabel(),
+          status: month.status || "active",
+          billTotal: month.billTotal,
+          dueDate: month.dueDate,
           members: month.members.map(normalizeMember)
         }))
     : [];
@@ -203,79 +217,209 @@ function loadState() {
   return { activeMonthId: firstMonth.id, months: [firstMonth], rev: 0 };
 }
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  queueServerSave();
-}
-
 function setSyncStatus(text) {
   els.syncStatus.textContent = text;
 }
 
-async function syncFromServer() {
+// ---------------------------------------------------------------------------
+// Server API (Supabase-backed, see api/*.py).
+// Supabase is the source of truth. localStorage is ONLY an offline
+// cache: it makes the app open instantly and keeps working offline,
+// but on every load the server wins. There is no whole-state sync
+// any more — edits go to the server one payment / one line at a time.
+// ---------------------------------------------------------------------------
+
+function sessionToken() {
   try {
-    const response = await fetch("./api/state", {
-      cache: "no-store",
-      headers: { "X-Sync-Secret": SYNC_SECRET }
-    });
-    if (response.status === 401) {
-      setSyncStatus("Sync locked — check SYNC_SECRET");
-      return;
-    }
-    if (!response.ok) throw new Error("sync unavailable");
-    const result = await response.json();
-    if (result.ok && result.state?.months?.length) {
-      state = normalizeState(result.state);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      render();
-      setSyncStatus("Synced");
-    } else {
-      setSyncStatus("Saving...");
-      await saveToServer();
-    }
-  } catch (err) {
-    setSyncStatus(`Local (${err.message || err})`);
+    return localStorage.getItem(SESSION_KEY) || "";
+  } catch {
+    return "";
   }
 }
 
-function queueServerSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveToServer, 450);
+function apiHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  const token = sessionToken();
+  if (token) headers["Authorization"] = "Bearer " + token;
+  return headers;
 }
 
-async function saveToServer() {
+async function apiGet(path) {
+  const response = await fetch(path, { cache: "no-store", headers: apiHeaders() });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(result.error || "request failed");
+    error.status = response.status;
+    throw error;
+  }
+  return result;
+}
+
+async function apiPost(path, body) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: apiHeaders(),
+    body: JSON.stringify(body)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(result.error || "request failed");
+    error.status = response.status;
+    error.result = result;
+    throw error;
+  }
+  return result;
+}
+
+function cacheState() {
   try {
-    setSyncStatus("Saving...");
-    const response = await fetch("./api/state", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Sync-Secret": SYNC_SECRET },
-      body: JSON.stringify(state)
-    });
-    if (response.status === 401) {
-      setSyncStatus("Sync locked — check SYNC_SECRET");
-      return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+}
+
+// Local cache only. Server writes happen in the mutation functions
+// below (postPayment / postLine / createMonthOnServer), one record
+// at a time — never a whole-state upload.
+function saveState() {
+  cacheState();
+}
+
+function serverMonthToLocal(view) {
+  return {
+    id: view.id,
+    label: view.label,
+    status: view.status,
+    billTotal: view.bill_total,
+    dueDate: view.due_date,
+    members: (view.members || []).map((m) => normalizeMember({
+      id: m.id,
+      name: m.name,
+      phone: m.phone,
+      due: m.due,
+      paid: m.paid,
+      received: m.received,
+      datePaid: m.datePaid,
+      method: m.method,
+      notes: m.notes,
+      reminderSent: m.reminderSent,
+      excluded: m.excluded,
+      attName: m.attName,
+      paymentStatus: m.paymentStatus,
+      lastUpdatedBy: m.lastUpdatedBy,
+      lastPaymentId: m.lastPaymentId,
+      draft: m.draft
+    }))
+  };
+}
+
+async function loadMonthsFromServer() {
+  try {
+    const list = await apiGet("./api/months");
+    const months = [];
+    for (const summary of list.months || []) {
+      const full = await apiGet(`./api/months/${summary.id}`);
+      if (full.month) months.push(serverMonthToLocal(full.month));
     }
-    if (response.status === 409) {
-      // Another device saved newer changes after this one last synced.
-      // Pull those instead of silently overwriting them.
-      const result = await response.json().catch(() => null);
-      if (result && result.state?.months?.length) {
-        state = normalizeState(result.state);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        render();
-      }
-      setSyncStatus("Reloaded — newer changes from another device");
-      return;
+    if (months.length) {
+      const previousActive = state.activeMonthId;
+      state = {
+        activeMonthId: months.some((m) => m.id === previousActive)
+          ? previousActive
+          : months[months.length - 1].id,
+        months,
+        rev: 0
+      };
+      cacheState();
+      render();
+      renderAgentStatus();
+      setSyncStatus("Synced");
+    } else {
+      setSyncStatus("Synced — no months on server yet");
     }
-    if (!response.ok) throw new Error("save failed");
-    const result = await response.json();
-    if (result.ok && Number.isInteger(result.rev)) {
-      state.rev = result.rev;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    }
-    setSyncStatus(result.ok ? "Synced" : "Local only");
   } catch (err) {
-    setSyncStatus(`Local (${err.message || err})`);
+    if (err.status === 401) {
+      setSyncStatus("Sign in required");
+    } else {
+      setSyncStatus("Local only — server unreachable");
+    }
+  }
+}
+
+function renderAgentStatus() {
+  const badge = document.querySelector("#draftBadge");
+  if (!badge) return;
+  const hasDraft = state.months.some((m) => m.status === "draft")
+    || state.months.some((m) => m.members.some((x) => x.paymentStatus === "pending"));
+  badge.hidden = !hasDraft;
+}
+
+// One payment to the server. source_id is the idempotency key:
+// re-sending the same payment returns the existing row, it never
+// double-counts. Returns the server payment, or null on failure
+// (the local change is kept and the status line explains why).
+async function postPayment(member, { amount, datePaid, method, source, sourceId, status }) {
+  try {
+    const result = await apiPost("./api/payments", {
+      member_id: member.id,
+      month_id: activeMonth().id,
+      amount,
+      date_paid: datePaid || todayValue(),
+      method: method || "Other",
+      source,
+      source_id: sourceId,
+      status: status || "confirmed"
+    });
+    if (result.payment?.id) member.lastPaymentId = result.payment.id;
+    if (result.payment?.created_by) member.lastUpdatedBy = result.payment.created_by;
+    setSyncStatus("Synced");
+    return result.payment || null;
+  } catch (err) {
+    setSyncStatus(err.status === 401 ? "Sign in required" : "Saved on this device — server unreachable");
+    return null;
+  }
+}
+
+async function postLine(member, patch) {
+  try {
+    await apiPost(`./api/months/${activeMonth().id}/lines`, { member_id: member.id, ...patch });
+    setSyncStatus("Synced");
+    return true;
+  } catch (err) {
+    setSyncStatus(err.status === 401 ? "Sign in required" : "Saved on this device — server unreachable");
+    return false;
+  }
+}
+
+async function voidPayment(member) {
+  if (!member.lastPaymentId) return false;
+  try {
+    await apiPost(`./api/payments/${member.lastPaymentId}/void`, {});
+    setSyncStatus("Synced");
+    return true;
+  } catch (err) {
+    setSyncStatus(err.status === 401 ? "Sign in required" : "Saved on this device — server unreachable");
+    return false;
+  }
+}
+
+async function createMonthOnServer(month) {
+  try {
+    const result = await apiPost("./api/months", {
+      id: month.id,
+      label: month.label,
+      bill_total: month.members.reduce((s, m) => s + Number(m.due || 0), 0),
+      status: "active",
+      lines: month.members.map((m) => ({
+        member_id: m.id,
+        phone: m.phone,
+        amount: Number(m.due || 0),
+        excluded: Boolean(m.excluded)
+      }))
+    });
+    return result.month || null;
+  } catch (err) {
+    setSyncStatus(err.status === 401 ? "Sign in required" : "Saved on this device — server unreachable");
+    return null;
   }
 }
 
@@ -359,6 +503,35 @@ function renderMembers() {
     node.classList.toggle("is-excluded", member.excluded);
     node.querySelector("h3").textContent = member.name;
     node.querySelector("p").textContent = member.phone;
+    // Agent provenance: show where a payment came from, and let Sunny
+    // undo a payment Muse recorded (voids it server-side).
+    if (member.draft || member.paymentStatus === "pending" || member.lastUpdatedBy === "muse") {
+      const badge = document.createElement("span");
+      badge.className = "muse-badge";
+      badge.textContent = member.paymentStatus === "pending"
+        ? "Muse • pending review"
+        : member.draft ? "Draft" : "Muse";
+      node.querySelector(".member-name").appendChild(badge);
+    }
+    if (member.lastUpdatedBy === "muse" && member.lastPaymentId) {
+      const undoButton = document.createElement("button");
+      undoButton.className = "quiet-button";
+      undoButton.type = "button";
+      undoButton.textContent = "Undo";
+      undoButton.title = "Undo the payment Muse recorded";
+      undoButton.addEventListener("click", async () => {
+        if (!confirm(`Undo ${member.name}'s payment recorded by Muse?`)) return;
+        if (await voidPayment(member)) {
+          member.paid = false;
+          member.received = 0;
+          member.datePaid = "";
+          member.lastPaymentId = "";
+          saveState();
+          render();
+        }
+      });
+      node.querySelector(".card-actions").appendChild(undoButton);
+    }
     node.querySelector(".amount-due").textContent = money(member.due);
 
     const checkButton = node.querySelector(".check-button");
@@ -411,7 +584,7 @@ function renderMembers() {
   }
 }
 
-function addMember() {
+async function addMember() {
   const name = prompt("Member name");
   if (!name?.trim()) return;
   const phone = prompt("Phone number", "") || "";
@@ -423,12 +596,25 @@ function addMember() {
     canonicalNamesByPhone[digits] = cleanedName;
   }
   const member = createMember({ name: cleanedName, phone: cleanedPhone, due: Math.max(due, 0) });
+  try {
+    const created = await apiPost("./api/members", { name: cleanedName, phone: cleanedPhone });
+    if (created.member?.id) member.id = created.member.id;
+    await apiPost(`./api/months/${activeMonth().id}/lines`, {
+      member_id: member.id,
+      due: member.due,
+      notes: "",
+      reminder_sent: false,
+      excluded: false
+    });
+  } catch {
+    setSyncStatus("Saved on this device — server unreachable");
+  }
   activeMonth().members.push(member);
   saveState();
   render();
 }
 
-function editMember(id) {
+async function editMember(id) {
   const member = activeMonth().members.find((entry) => entry.id === id);
   if (!member) return;
   const name = prompt("Member name", member.name);
@@ -450,14 +636,20 @@ function editMember(id) {
       entry.phone = newPhone;
     });
   });
+  try {
+    await apiPost(`./api/members/${member.id}`, { name: newName, phone: newPhone });
+  } catch {
+    setSyncStatus("Saved on this device — server unreachable");
+  }
   saveState();
   render();
 }
 
-function removeMember(id) {
+async function removeMember(id) {
   const member = activeMonth().members.find((entry) => entry.id === id);
   if (!member) return;
   if (!confirm(`Remove ${member.name} from ${activeMonth().label}?`)) return;
+  await postLine(member, { remove: true });
   activeMonth().members = activeMonth().members.filter((entry) => entry.id !== id);
   saveState();
   render();
@@ -695,33 +887,71 @@ function renderMessage() {
   els.messageBox.value = lines.join("\n");
 }
 
-function togglePaid(id) {
+async function togglePaid(id) {
   const member = activeMonth().members.find((entry) => entry.id === id);
   if (!member) return;
   member.paid = !member.paid;
   if (member.paid) {
     member.received = Number(member.due || 0);
     member.datePaid ||= todayValue();
+    await postPayment(member, {
+      amount: member.received,
+      datePaid: member.datePaid,
+      method: member.method || "Zelle",
+      source: "app",
+      sourceId: `app-paid:${activeMonth().id}:${member.id}`
+    });
   } else {
     member.received = 0;
     member.datePaid = "";
+    await voidPayment(member);
   }
   saveState();
   render();
 }
 
-function updateMember(id, patch) {
+async function updateMember(id, patch) {
   const member = activeMonth().members.find((entry) => entry.id === id);
   if (!member) return;
   Object.assign(member, patch);
   if (patch.due !== undefined) {
     member.due = Math.max(Number(member.due || 0), 0);
     if (member.paid) member.received = member.due;
+    await postLine(member, { due: member.due });
   }
   if (patch.received !== undefined) {
     member.received = Math.max(Number(member.received || 0), 0);
     member.paid = member.received >= Number(member.due || 0) && Number(member.due || 0) > 0;
     if (member.paid) member.datePaid ||= todayValue();
+    // The manual payment record is keyed app-manual:<month>:<member>,
+    // so re-saving the same received amount returns the existing
+    // row instead of double-counting; changing it corrects it.
+    if (member.received > 0) {
+      await postPayment(member, {
+        amount: member.received,
+        datePaid: member.datePaid,
+        method: member.method || "Other",
+        source: "app",
+        sourceId: `app-manual:${activeMonth().id}:${member.id}`
+      });
+    } else if (member.lastPaymentId) {
+      await voidPayment(member);
+    }
+  }
+  if ((patch.method !== undefined || patch.datePaid !== undefined) && member.received > 0) {
+    await postPayment(member, {
+      amount: member.received,
+      datePaid: member.datePaid,
+      method: member.method || "Other",
+      source: "app",
+      sourceId: `app-manual:${activeMonth().id}:${member.id}`
+    });
+  }
+  if (patch.notes !== undefined || patch.reminderSent !== undefined) {
+    await postLine(member, {
+      ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+      ...(patch.reminderSent !== undefined ? { reminder_sent: patch.reminderSent } : {})
+    });
   }
   saveState();
   render();
@@ -772,6 +1002,7 @@ async function submitNewMonth(event) {
   saveState();
   render();
   closeMonthDialog();
+  createMonthOnServer(month);
 
   const file = els.newMonthBillInput.files?.[0];
   if (file) {
@@ -822,11 +1053,16 @@ function nextMonthParts(label) {
   return { month: monthNames[now.getMonth()], year: now.getFullYear() };
 }
 
-function renameMonth() {
+async function renameMonth() {
   const month = activeMonth();
   const label = prompt("Month name", month.label);
   if (!label) return;
   month.label = label.trim();
+  try {
+    await apiPost(`./api/months/${month.id}`, { label: month.label });
+  } catch {
+    setSyncStatus("Saved on this device — server unreachable");
+  }
   saveState();
   render();
 }
@@ -846,10 +1082,13 @@ async function copyMessage() {
   }
 }
 
-function markRemindersSent() {
-  activeMonth().members.forEach((member) => {
-    if (!member.paid) member.reminderSent = true;
-  });
+async function markRemindersSent() {
+  for (const member of activeMonth().members) {
+    if (!member.paid) {
+      member.reminderSent = true;
+      await postLine(member, { reminder_sent: true });
+    }
+  }
   saveState();
   render();
 }
@@ -1253,6 +1492,7 @@ function useDetectedMonth() {
   saveState();
   render();
   renderDetectedMonth();
+  createMonthOnServer(month);
   scanBillText();
 }
 
@@ -1285,6 +1525,7 @@ function applySuggestion(suggestion) {
   if (!member) return false;
   member.due = suggestion.newAmount;
   if (member.paid) member.received = suggestion.newAmount;
+  postLine(member, { due: suggestion.newAmount });
   return true;
 }
 
@@ -1369,6 +1610,15 @@ function scanChatText() {
     member.method = detectMethod(line, member.method);
     member.notes = sender ? `Matched WhatsApp: ${sender}` : "Matched WhatsApp message";
     matched.push(`${member.name} on ${member.datePaid}`);
+    // Server ingest is preferred, but the client scan stays as a
+    // fallback for when Sunny pastes an export by hand.
+    postPayment(member, {
+      amount: member.received,
+      datePaid: member.datePaid,
+      method: member.method,
+      source: "whatsapp-export",
+      sourceId: `wa:${activeMonth().id}:${member.id}:${member.datePaid}:${member.received}`
+    });
   });
 
   saveState();
@@ -1413,9 +1663,12 @@ async function extractFileText(file) {
   if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
     els.importResults.textContent = "Extracting PDF text...";
     try {
+      const pdfHeaders = { "Content-Type": "application/pdf" };
+      const token = sessionToken();
+      if (token) pdfHeaders["Authorization"] = "Bearer " + token;
       const response = await fetch("./api/extract_pdf", {
         method: "POST",
-        headers: { "Content-Type": "application/pdf" },
+        headers: pdfHeaders,
         body: file
       });
       const result = await response.json();
@@ -1428,7 +1681,9 @@ async function extractFileText(file) {
       els.importResults.textContent = `PDF text extracted${pageText}. Tap Suggest amounts to review the new bill amounts.`;
       return result.text;
     } catch (error) {
-      els.importResults.textContent = `PDF could not be read here: ${error.message}. Use the Bill Collect backend URL or paste the bill text.`;
+      els.importResults.textContent = error.status === 401
+        ? "Sign in required to extract PDFs. Paste the bill text instead."
+        : `PDF could not be read here: ${error.message}. Use the Bill Collect backend URL or paste the bill text.`;
       return "";
     }
   }
@@ -1504,7 +1759,7 @@ if ("serviceWorker" in navigator && window.isSecureContext) {
 }
 
 render();
-syncFromServer();
+loadMonthsFromServer();
 
 // Liquid Glass Interactive Engine
 {

@@ -1383,3 +1383,27 @@ dialog::backdrop {
 .file-button:active {
   filter: brightness(0.95);
 }
+
+/* Agent provenance (Option A rebuild): badges for months/payments
+   created by Muse. Draft months and pending payments need Sunny's
+   review before they count as collected. */
+.muse-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.draft-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
