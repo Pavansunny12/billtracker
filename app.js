@@ -702,6 +702,11 @@ function renderMembers() {
     node.classList.toggle("is-excluded", member.excluded);
     node.querySelector("h3").textContent = member.name;
     node.querySelector("p").textContent = member.phone;
+    // Premium list: initials avatar (filled here; styled in styles.css).
+    const avatar = node.querySelector(".member-avatar");
+    if (avatar) {
+      avatar.textContent = member.name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+    }
     // Agent provenance: show where a payment came from, and let Sunny
     // undo a payment Muse recorded (voids it server-side).
     if (member.draft || member.paymentStatus === "pending" || member.lastUpdatedBy === "muse") {
