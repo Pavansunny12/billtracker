@@ -3,18 +3,15 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#f8fafc">
+    <meta name="theme-color" content="#ffffff">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Bill Collect">
     <title>Bill Collect</title>
     <link rel="manifest" href="./manifest.webmanifest">
     <link rel="apple-touch-icon" href="./icons/icon-192.svg">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./styles.css?v=30">
+    <link rel="stylesheet" href="./styles.css?v=31">
   </head>
   <body>
     <main class="app-shell">
@@ -42,9 +39,9 @@
       <section class="hero-card" aria-label="Dashboard Summary">
         <div class="hero-left">
           <div class="hero-remaining">
-            <p class="section-kicker">Remaining</p>
+            <p class="section-kicker">Remaining to collect</p>
             <strong id="remainingAmount">$0.00</strong>
-            <span id="progressText">0 of 0 paid</span>
+            <span class="progress-line"><span id="progressText">0 of 0 paid</span> · <b id="progressValue">0%</b></span>
           </div>
           <div class="hero-subgrid">
             <div class="hero-metric-item">
@@ -52,37 +49,23 @@
               <strong id="totalBill">$0.00</strong>
             </div>
             <div class="hero-metric-item">
-              <span>Owner Paid</span>
-              <strong id="ownerPaidAmount">$0.00</strong>
-            </div>
-            <div class="hero-metric-item">
-              <span>Collectible</span>
-              <strong id="collectibleAmount">$0.00</strong>
-            </div>
-          </div>
-        </div>
-        <div class="hero-right">
-          <div class="progress-ring" aria-hidden="true">
-            <svg viewBox="0 0 120 120">
-              <circle class="ring-bg" cx="60" cy="60" r="48"></circle>
-              <circle class="ring-fill" id="progressCircle" cx="60" cy="60" r="48"></circle>
-            </svg>
-            <b id="progressValue">0%</b>
-          </div>
-          <div class="hero-legend">
-            <div class="hero-legend-item">
               <span>Collected</span>
               <strong id="workflowCollected">$0.00</strong>
             </div>
-            <div class="hero-legend-item">
-              <span>Paid</span>
-              <strong id="workflowPaidCount">0</strong>
-            </div>
-            <div class="hero-legend-item">
-              <span>Pending</span>
-              <strong id="workflowPendingCount">0</strong>
+            <div class="hero-metric-item">
+              <span>Owner Paid</span>
+              <strong id="ownerPaidAmount">$0.00</strong>
             </div>
           </div>
+          <p class="hero-foot">Collectible <strong id="collectibleAmount">$0.00</strong> · <strong id="workflowPaidCount">0</strong> paid · <strong id="workflowPendingCount">0</strong> pending</p>
+        </div>
+        <!-- Progress ring kept (app.js still writes #progressCircle);
+             hidden by CSS — the percent now shows as plain text above. -->
+        <div class="progress-ring" aria-hidden="true">
+          <svg viewBox="0 0 120 120">
+            <circle class="ring-bg" cx="60" cy="60" r="48"></circle>
+            <circle class="ring-fill" id="progressCircle" cx="60" cy="60" r="48"></circle>
+          </svg>
         </div>
       </section>
 
@@ -328,17 +311,6 @@
         </div>
       </article>
     </template>
-
-    <!-- SVG Liquid Glass Filters -->
-    <svg style="position: fixed; width: 1px; height: 1px; pointer-events: none; opacity: 0.0001; left: -100px; top: -100px; visibility: visible;" aria-hidden="true">
-      <defs>
-        <filter id="liquid-glass-filter" x="-20%" y="-20%" width="140%" height="140%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" result="noise"/>
-          <feOffset dx="0" dy="0" in="noise" result="offsetNoise" id="noise-offset"/>
-          <feDisplacementMap in="SourceGraphic" in2="offsetNoise" scale="24" xChannelSelector="R" yChannelSelector="G"/>
-        </filter>
-      </defs>
-    </svg>
 
     <script src="./app.js?v=32"></script>
   </body>
