@@ -2,13 +2,17 @@ const STORAGE_KEY = "bill-collect-v1";
 
 // Auth: there is NO secret in this file any more. The old SYNC_SECRET
 // was hardcoded here, so anyone reading the page source could copy
-// it. The browser now sends a Supabase session token (Bearer) when
-// Sunny is signed in; the agent key (X-Agent-Key) is sent only by
-// the Muse cron, server-side, and never appears in client code.
-// TODO: wire Supabase Auth login UI and store the session token
-// under SESSION_KEY. Until then, server calls return 401 and the
-// app works from its localStorage cache, shown as "Sign in required".
+// it. The browser signs in with Supabase Auth (email + password, see
+// signIn() below) and sends the Supabase session token (Bearer) with
+// every server call; the server verifies that token (api/_lib.py)
+// before honouring the request. The agent key (X-Agent-Key) is sent
+// only by the Muse cron, server-side, and never appears in client
+// code. The Supabase project URL + anon key come from ./api/config
+// (server env vars) — never hardcoded here.
 const SESSION_KEY = "bill-collect-session";
+const REFRESH_KEY = "bill-collect-refresh";
+const USER_KEY = "bill-collect-user";
+const EXPIRES_KEY = "bill-collect-expires-at";
 const ringLength = 302;
 
 // Member names and phone numbers used to live here, hardcoded. They were
@@ -21,6 +25,16 @@ const canonicalNamesByPhone = {};
 const els = {
   monthSelect: document.querySelector("#monthSelect"),
   syncStatus: document.querySelector("#syncStatus"),
+  signInButton: document.querySelector("#signInButton"),
+  signOutButton: document.querySelector("#signOutButton"),
+  authEmail: document.querySelector("#authEmail"),
+  loginDialog: document.querySelector("#loginDialog"),
+  loginForm: document.querySelector("#loginForm"),
+  loginEmailInput: document.querySelector("#loginEmailInput"),
+  loginPasswordInput: document.querySelector("#loginPasswordInput"),
+  loginError: document.querySelector("#loginError"),
+  closeLoginDialogButton: document.querySelector("#closeLoginDialogButton"),
+  cancelLoginButton: document.querySelector("#cancelLoginButton"),
   newMonthButton: document.querySelector("#newMonthButton"),
   monthDialog: document.querySelector("#monthDialog"),
   monthForm: document.querySelector("#monthForm"),
@@ -235,6 +249,191 @@ function sessionToken() {
   } catch {
     return "";
   }
+}
+
+// ---------------------------------------------------------------------------
+// Sign-in (Supabase Auth, email + password).
+// The Supabase URL + anon key come from ./api/config, which reads them
+// from the server's env vars. The anon key is publishable by design;
+// the service key never reaches the browser. The session's access
+// token is stored under SESSION_KEY, exactly as the API calls expect.
+// Expiry is only checked client-side to know when to refresh — the
+// server re-verifies the token on every request, so a tampered or
+// expired token here buys nothing.
+// ---------------------------------------------------------------------------
+
+let authConfig = null;
+
+async function loadAuthConfig() {
+  if (authConfig) return authConfig;
+  try {
+    const response = await fetch("./api/config", { cache: "no-store" });
+    const result = await response.json().catch(() => ({}));
+    authConfig = result.configured
+      ? { url: result.supabase_url, anonKey: result.anon_key }
+      : null;
+  } catch {
+    authConfig = null;
+  }
+  return authConfig;
+}
+
+function jwtExpiryMs(token) {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return typeof payload.exp === "number" ? payload.exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function sessionEmail() {
+  try {
+    return localStorage.getItem(USER_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function saveSession(data) {
+  try {
+    localStorage.setItem(SESSION_KEY, data.access_token || "");
+    if (data.refresh_token) localStorage.setItem(REFRESH_KEY, data.refresh_token);
+    if (data.user?.email) localStorage.setItem(USER_KEY, data.user.email);
+    if (data.expires_in) {
+      localStorage.setItem(EXPIRES_KEY, String(Date.now() + data.expires_in * 1000));
+    }
+  } catch {}
+}
+
+function clearSession() {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(EXPIRES_KEY);
+  } catch {}
+}
+
+function updateAuthUI() {
+  const signedIn = Boolean(sessionToken());
+  if (els.signInButton) els.signInButton.hidden = signedIn;
+  if (els.signOutButton) els.signOutButton.hidden = !signedIn;
+  if (els.authEmail) {
+    els.authEmail.hidden = !signedIn;
+    els.authEmail.textContent = signedIn ? sessionEmail() : "";
+    els.authEmail.title = signedIn ? `Signed in as ${sessionEmail()}` : "";
+  }
+}
+
+function openLoginDialog(message) {
+  if (els.loginError) {
+    els.loginError.hidden = !message;
+    els.loginError.textContent = message || "";
+  }
+  if (els.loginDialog && !els.loginDialog.open) els.loginDialog.showModal();
+}
+
+function closeLoginDialog() {
+  if (els.loginDialog?.open) els.loginDialog.close();
+}
+
+async function signIn(email, password) {
+  const config = await loadAuthConfig();
+  if (!config) throw new Error("Sign-in is not configured on the server yet.");
+  const response = await fetch(`${config.url}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { apikey: config.anonKey, "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result.error_description || result.msg || "Sign-in failed. Check your email and password.");
+  }
+  saveSession(result);
+  updateAuthUI();
+}
+
+async function refreshSession() {
+  const config = await loadAuthConfig();
+  let refreshToken = "";
+  try {
+    refreshToken = localStorage.getItem(REFRESH_KEY) || "";
+  } catch {}
+  if (!config || !refreshToken) return false;
+  try {
+    const response = await fetch(`${config.url}/auth/v1/token?grant_type=refresh_token`, {
+      method: "POST",
+      headers: { apikey: config.anonKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.access_token) return false;
+    saveSession(result);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function signOut() {
+  const config = await loadAuthConfig();
+  const token = sessionToken();
+  if (config && token) {
+    try {
+      await fetch(`${config.url}/auth/v1/logout`, {
+        method: "POST",
+        headers: { apikey: config.anonKey, Authorization: "Bearer " + token }
+      });
+    } catch {}
+  }
+  clearSession();
+  updateAuthUI();
+  loadMonthsFromServer();
+}
+
+async function submitLogin(event) {
+  event.preventDefault();
+  const email = els.loginEmailInput.value.trim();
+  const password = els.loginPasswordInput.value;
+  if (!email || !password) return;
+  const submitButton = els.loginForm.querySelector("button[type='submit']");
+  if (submitButton) submitButton.disabled = true;
+  try {
+    await signIn(email, password);
+    closeLoginDialog();
+    setSyncStatus("Signed in");
+    loadMonthsFromServer();
+  } catch (err) {
+    openLoginDialog(err.message || "Sign-in failed.");
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Runs once at boot: refresh an expired session if possible, then
+// show the sign-in dialog when there is no usable session. The app
+// still works offline from its local cache when the dialog is closed
+// without signing in.
+async function initAuth() {
+  updateAuthUI();
+  const token = sessionToken();
+  if (token) {
+    const expiresAt = Number(localStorage.getItem(EXPIRES_KEY) || jwtExpiryMs(token) || 0);
+    if (expiresAt && Date.now() > expiresAt - 60000) {
+      const refreshed = await refreshSession();
+      updateAuthUI();
+      if (!refreshed) {
+        clearSession();
+        updateAuthUI();
+        openLoginDialog();
+        return false;
+      }
+    }
+    return true;
+  }
+  openLoginDialog();
+  return false;
 }
 
 function apiHeaders() {
@@ -1731,6 +1930,14 @@ els.ledgerPendingOnly.addEventListener("change", () => {
   renderHistory();
 });
 els.monthForm.addEventListener("submit", submitNewMonth);
+els.loginForm.addEventListener("submit", submitLogin);
+els.signInButton.addEventListener("click", () => openLoginDialog());
+els.signOutButton.addEventListener("click", signOut);
+els.closeLoginDialogButton.addEventListener("click", closeLoginDialog);
+els.cancelLoginButton.addEventListener("click", closeLoginDialog);
+els.loginDialog.addEventListener("click", (event) => {
+  if (event.target === els.loginDialog) closeLoginDialog();
+});
 els.closeMonthDialogButton.addEventListener("click", closeMonthDialog);
 els.cancelMonthButton.addEventListener("click", closeMonthDialog);
 els.monthDialog.addEventListener("click", (event) => {
@@ -1759,7 +1966,7 @@ if ("serviceWorker" in navigator && window.isSecureContext) {
 }
 
 render();
-loadMonthsFromServer();
+initAuth().then(() => loadMonthsFromServer());
 
 // Liquid Glass Interactive Engine
 {

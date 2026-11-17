@@ -3,7 +3,7 @@
 Extracts text from an uploaded AT&T bill PDF (pypdf). Unchanged
 behaviour, except it now requires auth like every other endpoint:
 either the agent key (X-Agent-Key, for Muse) or a user Bearer
-token (Sunny in the browser; see api/_lib.py user_present TODO).
+token (Sunny in the browser; verified as a Supabase JWT in api/_lib.py).
 
 Previously this endpoint was open to the internet with CORS *,
 so anyone could use Sunny's Vercel deployment to extract PDFs.

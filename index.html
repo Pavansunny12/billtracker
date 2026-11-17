@@ -26,6 +26,9 @@
           <span class="draft-badge" id="draftBadge" hidden>Draft — review needed</span>
         </div>
         <div class="topbar-right">
+          <span class="auth-email" id="authEmail" hidden></span>
+          <button class="quiet-button" id="signInButton" type="button">Sign in</button>
+          <button class="quiet-button" id="signOutButton" type="button" hidden>Sign out</button>
           <select id="monthSelect"></select>
           <button class="icon-button" id="renameMonthButton" type="button" aria-label="Rename month" title="Rename month">
             <svg viewBox="0 0 24 24" aria-hidden="true" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
@@ -201,6 +204,34 @@
       </section>
     </main>
 
+    <dialog id="loginDialog">
+      <form class="dialog-card" id="loginForm">
+        <header>
+          <div>
+            <p class="section-kicker">Bill Collect</p>
+            <h2>Sign in</h2>
+          </div>
+          <button class="icon-button" id="closeLoginDialogButton" type="button" aria-label="Close sign in">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </header>
+        <p class="helper-text">Sign in with your Supabase account to sync with the server. Without signing in, the app works from the copy saved on this device only.</p>
+        <label>
+          <span>Email</span>
+          <input id="loginEmailInput" type="email" autocomplete="username" required placeholder="you@example.com">
+        </label>
+        <label>
+          <span>Password</span>
+          <input id="loginPasswordInput" type="password" autocomplete="current-password" required placeholder="Your password">
+        </label>
+        <p class="login-error" id="loginError" hidden></p>
+        <menu>
+          <button class="quiet-button" id="cancelLoginButton" type="button">Use offline</button>
+          <button class="text-button" type="submit">Sign in</button>
+        </menu>
+      </form>
+    </dialog>
+
     <dialog id="monthDialog">
       <form class="dialog-card" id="monthForm">
         <header>
@@ -309,6 +340,6 @@
       </defs>
     </svg>
 
-    <script src="./app.js?v=31"></script>
+    <script src="./app.js?v=32"></script>
   </body>
 </html>

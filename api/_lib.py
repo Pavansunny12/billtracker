@@ -24,13 +24,17 @@ Two separate credentials, never in client JS:
     what the daily Gmail-watch cron uses to record payments and
     ingest bills.
   * User (Sunny, in the browser): header ``Authorization: Bearer
-    <token>``. TODO — before relying on this in production, verify
-    the token against Supabase Auth (JWT / JWKS) instead of
-    accepting any non-empty Bearer token. The current check only
-    establishes that a session token was presented; it is a stub
-    and is labelled as such wherever it is used. Do not treat a
-    present-but-unverified token as proof of identity in any
-    security review.
+    <Supabase access token>``. The token is verified by
+    ``verify_user_token`` before any user request is honoured:
+    its expiry is checked, then either its HS256 signature is
+    verified locally against SUPABASE_JWT_SECRET (legacy
+    HS256-signed projects only), or it is checked against
+    Supabase Auth itself (GET <SUPABASE_URL>/auth/v1/user with
+    the anon key — works for HS256 and ES256 projects alike).
+    Any failure — missing token, bad signature, expired token,
+    Auth returning non-200, network error, or no Supabase
+    config at all — rejects the request (401). There is no
+    "token was presented, good enough" path any more.
 
 CORS
 ----
@@ -40,11 +44,14 @@ A request from any other Origin gets no Access-Control-Allow-Origin
 header at all.
 """
 
+import base64
 import copy
+import hashlib
 import hmac
 import json
 import os
 import re
+import time
 import urllib.parse
 import urllib.request
 import urllib.error
@@ -147,27 +154,172 @@ def is_agent(headers):
 
 
 def user_present(headers):
-    """TODO (stub): a non-empty Bearer token was presented.
+    """True when a non-empty Bearer token was presented.
 
-    This does NOT verify the token. Before production use, verify
-    it as a Supabase Auth JWT (signature + expiry + aud) in this
-    function. Until then, treat user-authenticated writes as
-    "a session token was presented", and rely on the agent key
-    for anything the Muse cron does.
+    Presence only — this is NOT authentication. Use
+    ``verify_user_token`` / ``require_auth`` to decide whether a
+    request is allowed.
     """
     auth = headers.get("Authorization") or headers.get("authorization") or ""
     return isinstance(auth, str) and auth.startswith("Bearer ") and len(auth) > 7
 
 
-def require_auth(headers, agent_only=False):
+def _b64url_decode(segment):
+    padding = "=" * (-len(segment) % 4)
+    return base64.urlsafe_b64decode(segment + padding)
+
+
+def _jwt_payload_unchecked(token):
+    """Decode a JWT payload WITHOUT verifying it (expiry pre-check only)."""
+    try:
+        parts = str(token).split(".")
+        if len(parts) != 3:
+            return None
+        payload = json.loads(_b64url_decode(parts[1]).decode("utf-8"))
+        return payload if isinstance(payload, dict) else None
+    except Exception:
+        return None
+
+
+def _jwt_expired(payload, leeway_seconds=30):
+    """True when the payload has no usable exp or exp is in the past."""
+    exp = payload.get("exp") if isinstance(payload, dict) else None
+    if not isinstance(exp, (int, float)) or isinstance(exp, bool):
+        return True
+    return time.time() > exp + leeway_seconds
+
+
+def _verify_hs256(token, secret):
+    """Verify an HS256 JWT locally. Returns the payload or None.
+
+    Used only when SUPABASE_JWT_SECRET is set (legacy HS256-signed
+    Supabase projects). Checks alg, HMAC-SHA256 signature, expiry,
+    aud == "authenticated" when present, and iss against
+    SUPABASE_URL when both are present.
+    """
+    try:
+        header_b64, payload_b64, sig_b64 = str(token).split(".")
+        header = json.loads(_b64url_decode(header_b64).decode("utf-8"))
+        if header.get("alg") != "HS256":
+            return None
+        signing_input = (header_b64 + "." + payload_b64).encode("ascii")
+        expected = hmac.new(
+            secret.encode("utf-8"), signing_input, hashlib.sha256
+        ).digest()
+        if not hmac.compare_digest(expected, _b64url_decode(sig_b64)):
+            return None
+        payload = json.loads(_b64url_decode(payload_b64).decode("utf-8"))
+        if not isinstance(payload, dict) or _jwt_expired(payload):
+            return None
+        if payload.get("aud") not in (None, "authenticated"):
+            return None
+        iss = payload.get("iss")
+        url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+        if iss and url and not str(iss).startswith(url):
+            return None
+        return payload
+    except Exception:
+        return None
+
+
+# Short-lived cache for Supabase Auth /user checks: one HTTPS call
+# per token per minute at most. Keyed by the token's hash, never by
+# the token itself in a log.
+_AUTH_USER_CACHE = {}
+_AUTH_USER_CACHE_TTL_SECONDS = 60
+
+
+def _default_auth_user_fetcher(url, headers):
+    """GET url -> (status, body). Returns (0, "") on network error."""
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.status, resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        try:
+            return exc.code, exc.read().decode("utf-8", "replace")
+        except Exception:
+            return exc.code, ""
+    except Exception:
+        return 0, ""
+
+
+def _verify_via_auth(token, fetcher=None):
+    """Verify a token with Supabase Auth itself.
+
+    GET <SUPABASE_URL>/auth/v1/user with the anon key: Supabase
+    validates the signature and expiry for its own signing scheme
+    (HS256 or ES256) and returns the user, or 401. Returns the
+    user dict or None. Fail-closed on any error or missing config.
+    ``fetcher`` is an injectable (url, headers) -> (status, body)
+    used by tests; production uses the real HTTPS fetcher.
+    """
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    anon = os.environ.get("SUPABASE_ANON_KEY", "")
+    if not url or not anon:
+        return None
+    cache_key = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    cached = _AUTH_USER_CACHE.get(cache_key)
+    if cached and cached[1] > time.monotonic():
+        return cached[0]
+    fetch = fetcher or _default_auth_user_fetcher
+    try:
+        status, body = fetch(
+            url + "/auth/v1/user",
+            {"apikey": anon, "Authorization": "Bearer " + token},
+        )
+    except Exception:
+        return None
+    if status != 200:
+        return None
+    try:
+        user = json.loads(body)
+    except Exception:
+        return None
+    if not isinstance(user, dict) or not user.get("id"):
+        return None
+    _AUTH_USER_CACHE[cache_key] = (
+        user, time.monotonic() + _AUTH_USER_CACHE_TTL_SECONDS
+    )
+    return user
+
+
+def verify_user_token(token, fetcher=None):
+    """Verify a Supabase user access token. Returns user/payload or None.
+
+    Order: reject malformed/expired tokens first (cheap, no
+    network), then verify the signature — locally with
+    SUPABASE_JWT_SECRET when set (HS256 legacy projects), else
+    through Supabase Auth's /user endpoint. Anything unverifiable
+    returns None: callers treat that as 401.
+    """
+    if not isinstance(token, str) or not token:
+        return None
+    payload = _jwt_payload_unchecked(token)
+    if payload is None or _jwt_expired(payload):
+        return None
+    secret = os.environ.get("SUPABASE_JWT_SECRET", "")
+    if secret:
+        return _verify_hs256(token, secret)
+    return _verify_via_auth(token, fetcher=fetcher)
+
+
+def require_auth(headers, agent_only=False, fetcher=None):
     """Return (actor, None) on success or (None, error-payload) on 401.
 
-    actor is "muse" for the agent key, "user" for a Bearer token.
-    When AGENT_SECRET is unset, agent auth always fails closed.
+    actor is "muse" for the agent key, "user" for a verified
+    Supabase Bearer token. When AGENT_SECRET is unset, agent auth
+    always fails closed; when no Supabase config is present, user
+    auth always fails closed. ``fetcher`` is passed through to
+    token verification (tests only).
     """
     if is_agent(headers):
         return "muse", None
-    if not agent_only and user_present(headers):
+    if agent_only:
+        return None, {"ok": False, "error": "unauthorized"}
+    auth = headers.get("Authorization") or headers.get("authorization") or ""
+    token = auth[7:] if isinstance(auth, str) and auth.startswith("Bearer ") else ""
+    if token and verify_user_token(token, fetcher=fetcher) is not None:
         return "user", None
     return None, {"ok": False, "error": "unauthorized"}
 

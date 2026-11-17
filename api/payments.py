@@ -1,11 +1,11 @@
 """Bill Collect — POST /api/payments (and /api/payments/<id>/void|confirm).
 
 One payment = one row. Idempotency is on `source_id` (e.g. a Gmail
-message id, a Plaid transaction id, or an app-generated key):
+message id or an app-generated key):
   * same source_id + same amount/member/month -> the existing
     payment is returned, nothing is counted twice (200, duplicate).
   * same source_id + different amount from an agent source
-    (gmail/plaid/zelle-email) -> 409 conflict; a retried email
+    (gmail/zelle-email) -> 409 conflict; a retried email
     must never silently change an amount.
   * same source_id + different amount from the app (Sunny editing
     a manual entry in the UI) -> the payment is corrected in
@@ -19,7 +19,7 @@ badge, but do NOT count toward collected totals until confirmed
 but the member stays unpaid until the confirmed total reaches due.
 
 Auth: agent key (X-Agent-Key, for the Muse cron) or user Bearer
-token (Sunny in the browser; see _lib.py user_present TODO).
+token (Sunny in the browser; verified as a Supabase JWT in _lib.py).
 """
 
 try:

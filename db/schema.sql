@@ -9,21 +9,9 @@
 -- env vars). The browser app uses SUPABASE_ANON_KEY and never sees
 -- the service key.
 --
--- Row-level security intent (enable RLS and add policies in the
--- Supabase dashboard after running this file):
---   * members / months / payments / bill_lines / audit_log:
---     - Authenticated users (Sunny, via Supabase Auth) may
---       SELECT/INSERT/UPDATE on rows they own. This is a
---       single-household tracker, so the policy is: any
---       authenticated user may read/write. Do NOT open these
---       tables to the anon role.
---     - The `service_role` key bypasses RLS and is used ONLY by
---       the Vercel server functions. It is never shipped in
---       app.js or any client bundle.
---   * If RLS is left off, the tables are still protected by the
---     Vercel API layer (AGENT_SECRET / user Bearer checks in
---     api/_lib.py), but turning RLS on is the second line of
---     defence. Do both.
+-- Row-level security: see db/rls.sql — run it after this file.
+-- It enables RLS on the five tables with authenticated-only
+-- policies (anon gets nothing; service_role bypasses RLS).
 --
 -- Amounts are NUMERIC(10,2) USD. Dates are DATE. All ids are UUIDs
 -- so the existing state.json ids can be preserved by migration.
@@ -63,7 +51,7 @@ create index if not exists months_status_idx on months (status);
 -- One row per payment. A member's "received" for a month is the
 -- sum of their confirmed, non-void payments for that month; a
 -- member is "paid" when that sum >= the bill_lines amount.
--- source_id is UNIQUE so the same Zelle email / Plaid transaction
+-- source_id is UNIQUE so the same Zelle email
 -- / WhatsApp line can never be counted twice, no matter how many
 -- times the Muse cron retries it.
 -- status: 'pending' (recorded by Muse, needs Sunny's review —

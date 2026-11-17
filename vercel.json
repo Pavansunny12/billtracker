@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "builds": [
     {
+      "src": "api/config.py",
+      "use": "@vercel/python"
+    },
+    {
       "src": "api/extract_pdf.py",
       "use": "@vercel/python"
     },
@@ -63,6 +67,10 @@
     }
   ],
   "routes": [
+    {
+      "dest": "api/config.py",
+      "src": "/api/config"
+    },
     {
       "dest": "api/extract_pdf.py",
       "src": "/api/extract_pdf"

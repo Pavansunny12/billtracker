@@ -31,12 +31,12 @@ November payments live only on your phone, export them first:
 3. In the Supabase SQL editor, run `db/schema.sql` from this repo.
    It creates `members`, `months`, `payments`, `bill_lines` and
    `audit_log`, plus indexes. It inserts no data.
-4. In Authentication → Policies, turn on Row Level Security for
-   those five tables and add a policy that only authenticated
-   users may read/write (anon gets nothing). The Vercel functions
-   use the service key and bypass RLS; the browser never sees it.
-   If you skip RLS, the API layer below is still the gate, but
-   RLS is the second line of defence — do both.
+4. Still in the SQL editor, run `db/rls.sql`. It turns on Row
+   Level Security for those five tables and adds a policy that
+   only authenticated users may read/write (anon gets nothing).
+   The Vercel functions use the service key and bypass RLS; the
+   browser never sees it. RLS is the second line of defence
+   behind the API layer — do both.
 
 ## Step 2: Set Vercel environment variables
 
@@ -45,9 +45,10 @@ Settings → Environment Variables (Production + Preview):
 
 | Key | Value | Notes |
 | --- | --- | --- |
-| `SUPABASE_URL` | your Supabase project URL | e.g. `https://xyzcompany.supabase.co` |
-| `SUPABASE_ANON_KEY` | Supabase anon/public key | Safe for the browser (RLS still applies) |
+| `SUPABASE_URL` | your Supabase project URL | e.g. `https://fqapqmhxsgcogsvtwnnz.supabase.co` |
+| `SUPABASE_ANON_KEY` | Supabase anon/public key | Safe for the browser (RLS still applies); also served to the app by `GET /api/config` so sign-in works |
 | `SUPABASE_SERVICE_KEY` | Supabase service_role key | **Server-only. Never paste this in chat, in `app.js`, or in the repo.** |
+| `SUPABASE_JWT_SECRET` | Supabase JWT secret | **Optional, legacy HS256 projects only.** When set, the API verifies user tokens locally. When unset (the default for newer ES256 projects), the API verifies tokens through Supabase Auth instead. Do NOT set it unless your project signs JWTs with HS256 — setting it on an ES256 project breaks sign-in. |
 | `AGENT_SECRET` | a long random secret you generate | Shared only between Vercel and Muse's secure vault |
 | `ALLOWED_ORIGINS` | `https://billtracker-tsyw-rose.vercel.app` | Optional; this is the default. No `*` anywhere. |
 
@@ -106,31 +107,53 @@ hides future reads but does not erase the old public commits.
    migration source — do not delete it locally until Step 5 is
    verified live).
 
-## Step 5: Connect Plaid for BofA (optional, recommended)
+## Step 5: Payment detection — Gmail only (no bank reads)
 
-Plaid lets Muse read your BofA transactions directly, so Zelle
-payments are detected even if BofA email alerts are off:
+Plaid is OUT. Do not connect it: Sunny does not want Muse
+reading his bank or financial data, so there is no Plaid link,
+no bank-transaction reading, and no other financial access.
 
-1. Ask Muse for the Plaid connect link and link BofA (you sign
-   in at Plaid/BofA — Muse never sees your bank password).
-2. Once linked, the daily cron reads new transactions, finds
-   incoming Zelle credits, matches sender + amount to a member,
-   and records the payment via `POST /api/payments`.
-3. If you skip Plaid, turn on BofA email alerts instead
-   (BofA app → Alerts → Zelle → payment received → email on).
-   Without either, Muse can only report payments you forward or
-   paste from the WhatsApp export.
+Payments are detected from email only:
+
+1. Turn on BofA email alerts (BofA app → Alerts → Zelle →
+   payment received → email on). Sunny does this himself.
+2. The daily cron reads Gmail for BofA "Zelle payment received"
+   emails and for the AT&T bill-ready email, matches the sender
+   + amount to a member, and records the payment via
+   `POST /api/payments` with the Gmail message id as
+   `source_id`.
+3. New bills come from the AT&T bill PDF (Sunny sends it, or
+   pastes the bill text): Muse calls `POST /api/bill_ingest`
+   and shows a draft month for approval.
+4. Anything email cannot see — a payment with no email, a
+   WhatsApp-only note — is reported only when Sunny forwards
+   it or pastes a WhatsApp export into the app.
+
+## Step 5b: Create your sign-in user (Supabase Auth)
+
+The app's sign-in screen is sign-in only — there is no
+sign-up in the app. Create the one user first, in Supabase:
+
+1. Supabase dashboard → Authentication → Users → Add user.
+2. Email + a password, tick "Auto Confirm User" (or confirm
+   via the email link), then Create user.
+3. That email + password is what you type in the app's
+   Sign in dialog. Password reset is also done from the
+   Supabase dashboard (or the Auth "forgot password" email),
+   not from the app.
 
 ## Step 6: Deploy
 
-1. Push the `bill-collect-agent-control` branch and open a pull
-   request, or merge it to `main` — nothing is pushed yet.
+1. The `bill-collect-agent-control` branch is already on
+   GitHub. Open a pull request, or merge it to `main` — nothing
+   is merged yet, and the live site still runs the old code.
 2. Vercel → Deployments → Redeploy (or push to `main` if Vercel
    auto-deploys from GitHub).
-3. Open the app. It will ask you to sign in (Supabase Auth —
-   TODO: the login UI is a stub in this build; see below) and then
-   show the months from Supabase. If it shows "Sign in required",
-   the API is working and the login UI is the remaining piece.
+3. Open the app. The Sign in dialog appears: sign in with the
+   user from Step 5b, and the months load from Supabase. If it
+   shows "Sign in required" after signing in, the API is
+   rejecting the token — check the Vercel env vars in Step 2
+   (SUPABASE_URL + SUPABASE_ANON_KEY must match the project).
 4. Spot-check one month against the old app: totals, who paid,
    who still owes. Then the old GitHub sync is done — the old
    `/api/state` endpoint no longer exists (it returns 404).
@@ -145,8 +168,7 @@ payments are detected even if BofA email alerts are off:
   month, missing members, unknown phones), and creates the month
   only after you approve it.
 - New payment: Muse calls `POST /api/payments` with the sender,
-  amount, date, method, and the Gmail message id (or Plaid
-  transaction id) as `source_id`. The same payment can never be
+  amount, date, method, and the Gmail message id as `source_id`. The same payment can never be
   counted twice. Partial payments are recorded but the member
   stays unpaid until the confirmed total reaches the due.
 - Undo: any payment Muse recorded can be undone from the app
@@ -161,6 +183,7 @@ auth → 401. Bodies are capped at 2 MB.
 
 | Endpoint | Method | What it does |
 | --- | --- | --- |
+| `/api/config` | GET | Publishable Supabase config for the browser (URL + anon key). No auth; never returns the service key |
 | `/api/months` | GET | List months with totals |
 | `/api/months/<id>` | GET | One month: members, payments, who owes |
 | `/api/months` | POST | Create a month from an approved draft |
@@ -177,21 +200,26 @@ auth → 401. Bodies are capped at 2 MB.
 
 ## Known gaps in this build (do not paper over)
 
-1. **Supabase Auth login UI is a TODO stub.** `app.js` sends a
-   Bearer token from `localStorage["bill-collect-session"]` when
-   one exists, but there is no sign-in screen yet to obtain it.
-   Until the login UI is built, the app works from its offline
-   cache and server calls return "Sign in required". The API
-   itself is complete; the login screen is the next build.
-2. **User Bearer tokens are not yet verified as JWTs.**
-   `api/_lib.py user_present()` only checks that a Bearer token
-   was presented. Before production use, verify it against
-   Supabase Auth (signature + expiry). The agent key path
-   (X-Agent-Key, hmac, fail-closed) is fully implemented.
-3. **Backup restore is local-only.** Importing a JSON backup
+1. **Sign-in is email + password only, no sign-up or password
+   reset in the app.** The one user is created in the Supabase
+   dashboard (Step 5b). Anyone else who needs access needs
+   their own Supabase Auth user the same way.
+2. **Backup restore is local-only.** Importing a JSON backup
    restores the app's offline cache; it does not write to
    Supabase. Use the migration script for server restores.
-4. **October/November data is not migrated yet.** See Step 0.
+3. **October/November data is not migrated yet.** See Step 0.
+4. **User tokens are verified, but the /user check adds one
+   Supabase Auth call per token per minute** (cached 60s).
+   If Supabase Auth is down, user requests get 401 while the
+   agent key keeps working — the app falls back to its offline
+   cache, and the cron is unaffected.
+
+Done since the last version of this file: the Supabase Auth
+login screen is built (Sign in dialog, sign-out, session
+refresh), user Bearer tokens are verified as JWTs server-side
+(`api/_lib.py verify_user_token`: HS256 locally when
+SUPABASE_JWT_SECRET is set, else via Supabase Auth), and
+`db/rls.sql` enables RLS with authenticated-only policies.
 
 ## 📱 How to Install on iPhone / Android
 1. Open the production URL in Safari (iPhone) or Chrome (Android).

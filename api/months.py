@@ -17,7 +17,7 @@ POST /api/months/<id>/lines update one member's line in a month
                             Due / Notes / Reminder edits.
 
 Auth: agent key (X-Agent-Key, Muse cron) or user Bearer token
-(Sunny in the browser; see _lib.py user_present TODO).
+(Sunny in the browser; verified as a Supabase JWT in _lib.py).
 """
 
 try:

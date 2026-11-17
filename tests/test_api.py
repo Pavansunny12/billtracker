@@ -8,10 +8,14 @@ Run from the repo root:
     python3 -m unittest discover -s tests -v
 """
 
+import base64
+import hashlib
+import hmac as hmac_mod
 import importlib.util
 import json
 import os
 import sys
+import time
 import unittest
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -32,9 +36,37 @@ payments = load("payments", "payments.py")
 bill_ingest = load("bill_ingest", "bill_ingest.py")
 months = load("months", "months.py")
 summary = load("summary", "summary.py")
+config = load("config", "config.py")
 
 AGENT_HEADERS = {"X-Agent-Key": "test-agent-secret"}
-USER_HEADERS = {"Authorization": "Bearer test-user-token"}
+TEST_JWT_SECRET = "test-jwt-secret"
+TEST_SUPABASE_URL = "https://fqapqmhxsgcogsvtwnnz.supabase.co"
+
+
+def _b64url(data):
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def mint_token(secret=TEST_JWT_SECRET, exp_offset=3600, aud="authenticated",
+               iss=TEST_SUPABASE_URL + "/auth/v1", sub="user-1"):
+    """Mint a real HS256 JWT the way Supabase would (test secret only)."""
+    header = _b64url(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+    now = int(time.time())
+    payload = {"sub": sub, "aud": aud, "iss": iss,
+               "exp": now + exp_offset, "iat": now}
+    payload_b64 = _b64url(json.dumps(payload).encode())
+    sig = hmac_mod.new(
+        secret.encode(), ("%s.%s" % (header, payload_b64)).encode(),
+        hashlib.sha256,
+    ).digest()
+    return "%s.%s.%s" % (header, payload_b64, _b64url(sig))
+
+
+def user_headers(token=None):
+    return {"Authorization": "Bearer " + (token or mint_token())}
+
+
+USER_HEADERS = user_headers()
 
 
 def seed_store():
@@ -73,15 +105,25 @@ def payment_body(**overrides):
 
 class AgentApiTest(unittest.TestCase):
     def setUp(self):
-        self._old_secret = os.environ.get("AGENT_SECRET")
+        self._old_env = {}
+        for key in ("AGENT_SECRET", "SUPABASE_URL", "SUPABASE_ANON_KEY",
+                    "SUPABASE_JWT_SECRET"):
+            self._old_env[key] = os.environ.get(key)
         os.environ["AGENT_SECRET"] = "test-agent-secret"
+        os.environ["SUPABASE_URL"] = TEST_SUPABASE_URL
+        os.environ["SUPABASE_JWT_SECRET"] = TEST_JWT_SECRET
+        os.environ.pop("SUPABASE_ANON_KEY", None)
+        _lib._AUTH_USER_CACHE.clear()
         self.store = seed_store()
+        self.user_headers = user_headers()
 
     def tearDown(self):
-        if self._old_secret is None:
-            os.environ.pop("AGENT_SECRET", None)
-        else:
-            os.environ["AGENT_SECRET"] = self._old_secret
+        for key, value in self._old_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        _lib._AUTH_USER_CACHE.clear()
 
     # -- auth ---------------------------------------------------------
     def test_payment_requires_auth(self):
@@ -99,12 +141,12 @@ class AgentApiTest(unittest.TestCase):
 
     def test_user_bearer_accepted_for_payments(self):
         status, payload = payments.handle_create_payment(
-            self.store, USER_HEADERS, payment_body())
+            self.store, self.user_headers, payment_body())
         self.assertEqual(status, 201)
 
     def test_bill_ingest_is_agent_only(self):
         status, _ = bill_ingest.handle_bill_ingest(
-            self.store, USER_HEADERS,
+            self.store, self.user_headers,
             json.dumps({"text": "Total for 123.456.7890 $37.65"}).encode())
         self.assertEqual(status, 401)
 
@@ -259,6 +301,159 @@ class AgentApiTest(unittest.TestCase):
             "https://billtracker-tsyw-rose.vercel.app",
         )
         self.assertNotIn("*", json.dumps(allowed))
+
+
+class JwtVerificationTest(unittest.TestCase):
+    """User Bearer tokens must be verified JWTs, not just present.
+
+    HS256 path is exercised with a test secret; the Supabase Auth
+    /user path is exercised with an injected fake fetcher, so no
+    test touches the network.
+    """
+
+    def setUp(self):
+        self._old_env = {}
+        for key in ("AGENT_SECRET", "SUPABASE_URL", "SUPABASE_ANON_KEY",
+                    "SUPABASE_JWT_SECRET"):
+            self._old_env[key] = os.environ.get(key)
+        os.environ["AGENT_SECRET"] = "test-agent-secret"
+        os.environ["SUPABASE_URL"] = TEST_SUPABASE_URL
+        os.environ["SUPABASE_JWT_SECRET"] = TEST_JWT_SECRET
+        os.environ.pop("SUPABASE_ANON_KEY", None)
+        _lib._AUTH_USER_CACHE.clear()
+        self.store = seed_store()
+
+    def tearDown(self):
+        for key, value in self._old_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        _lib._AUTH_USER_CACHE.clear()
+
+    # -- HS256 path (SUPABASE_JWT_SECRET) ------------------------------
+    def test_valid_token_verifies_and_authenticates(self):
+        token = mint_token()
+        payload = _lib.verify_user_token(token)
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload["sub"], "user-1")
+        actor, err = _lib.require_auth(user_headers(token))
+        self.assertEqual((actor, err), ("user", None))
+
+    def test_expired_token_rejected(self):
+        token = mint_token(exp_offset=-3600)
+        self.assertIsNone(_lib.verify_user_token(token))
+        status, _ = payments.handle_create_payment(
+            self.store, user_headers(token), payment_body())
+        self.assertEqual(status, 401)
+
+    def test_wrong_signature_rejected(self):
+        token = mint_token(secret="a-different-secret")
+        self.assertIsNone(_lib.verify_user_token(token))
+        actor, err = _lib.require_auth(user_headers(token))
+        self.assertIsNone(actor)
+        self.assertEqual(err["error"], "unauthorized")
+
+    def test_tampered_payload_rejected(self):
+        token = mint_token()
+        head, payload_b64, sig = token.split(".")
+        tampered = payload_b64[:-1] + ("A" if payload_b64[-1] != "A" else "B")
+        self.assertIsNone(_lib.verify_user_token("%s.%s.%s" % (head, tampered, sig)))
+
+    def test_wrong_audience_rejected(self):
+        self.assertIsNone(_lib.verify_user_token(mint_token(aud="someone-else")))
+
+    def test_malformed_and_missing_tokens_rejected(self):
+        for bad in ("", "not-a-jwt", "two.parts",
+                    mint_token() + ".extra", "Bearer "):
+            self.assertIsNone(_lib.verify_user_token(bad), bad)
+        actor, err = _lib.require_auth({})
+        self.assertIsNone(actor)
+        self.assertEqual(err["error"], "unauthorized")
+        actor, err = _lib.require_auth({"Authorization": "Bearer "})
+        self.assertIsNone(actor)
+
+    def test_agent_key_still_works_alongside_jwt(self):
+        actor, err = _lib.require_auth(AGENT_HEADERS)
+        self.assertEqual((actor, err), ("muse", None))
+        actor, err = _lib.require_auth(AGENT_HEADERS, agent_only=True)
+        self.assertEqual(actor, "muse")
+
+    def test_user_auth_fails_closed_without_supabase_config(self):
+        os.environ.pop("SUPABASE_JWT_SECRET", None)
+        os.environ.pop("SUPABASE_URL", None)
+        os.environ.pop("SUPABASE_ANON_KEY", None)
+        self.assertIsNone(_lib.verify_user_token(mint_token()))
+        status, _ = payments.handle_create_payment(
+            self.store, user_headers(), payment_body())
+        self.assertEqual(status, 401)
+
+    # -- Supabase Auth /user path (no JWT secret) ----------------------
+    def _auth_env(self):
+        os.environ.pop("SUPABASE_JWT_SECRET", None)
+        os.environ["SUPABASE_URL"] = TEST_SUPABASE_URL
+        os.environ["SUPABASE_ANON_KEY"] = "test-anon-key"
+
+    def test_auth_endpoint_accepts_valid_token(self):
+        self._auth_env()
+        seen = {}
+
+        def fake_fetch(url, headers):
+            seen["url"] = url
+            seen["headers"] = headers
+            return 200, '{"id": "user-1", "email": "sunny@example.com"}'
+
+        user = _lib.verify_user_token(mint_token(), fetcher=fake_fetch)
+        self.assertEqual(user["email"], "sunny@example.com")
+        self.assertEqual(seen["url"], TEST_SUPABASE_URL + "/auth/v1/user")
+        self.assertEqual(seen["headers"]["apikey"], "test-anon-key")
+
+    def test_auth_endpoint_rejects_on_401(self):
+        self._auth_env()
+        user = _lib.verify_user_token(
+            mint_token(), fetcher=lambda u, h: (401, '{"msg": "bad token"}'))
+        self.assertIsNone(user)
+
+    def test_auth_endpoint_fails_closed_on_network_error(self):
+        self._auth_env()
+
+        def boom(url, headers):
+            raise RuntimeError("network down")
+
+        self.assertIsNone(_lib.verify_user_token(mint_token(), fetcher=boom))
+
+
+class ConfigEndpointTest(unittest.TestCase):
+    def setUp(self):
+        self._old_env = {}
+        for key in ("SUPABASE_URL", "SUPABASE_ANON_KEY"):
+            self._old_env[key] = os.environ.get(key)
+
+    def tearDown(self):
+        for key, value in self._old_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    def test_config_returns_publishable_values_only(self):
+        os.environ["SUPABASE_URL"] = TEST_SUPABASE_URL
+        os.environ["SUPABASE_ANON_KEY"] = "test-anon-key"
+        os.environ["SUPABASE_SERVICE_KEY"] = "super-secret-service-key"
+        status, payload = config.handle_config()
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["configured"])
+        self.assertEqual(payload["supabase_url"], TEST_SUPABASE_URL)
+        self.assertEqual(payload["anon_key"], "test-anon-key")
+        self.assertNotIn("super-secret-service-key", json.dumps(payload))
+        self.assertNotIn("service", json.dumps(payload).lower())
+
+    def test_config_unconfigured_when_env_missing(self):
+        os.environ.pop("SUPABASE_URL", None)
+        os.environ.pop("SUPABASE_ANON_KEY", None)
+        status, payload = config.handle_config()
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["configured"])
 
 
 if __name__ == "__main__":

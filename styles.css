@@ -1407,3 +1407,22 @@ dialog::backdrop {
   font-size: 0.75rem;
   font-weight: 700;
 }
+
+/* Sign-in: reuse the dialog/button styles above. Only the signed-in
+   email label and the login error line are new. */
+.auth-email {
+  align-self: center;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.login-error {
+  margin: 0 0 12px;
+  color: var(--red);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
