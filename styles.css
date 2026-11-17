@@ -1,26 +1,33 @@
-/* Bill Collect — clean and simple.
-   Pure white, system font, hairline borders, big numbers.
-   No glass, no gradients, no blobs, no heavy shadows.
-   Class names are unchanged: app.js builds and queries this DOM,
-   so every class below must stay. */
+/* Bill Collect — premium.
+   White base, big numbers, refined serif display figure.
+   One soft shadow lives on the summary card only; everything
+   else is flat white with hairlines. No gradients, no glass,
+   no blobs. Class names are unchanged: app.js builds and queries
+   this DOM, so every class below must stay. */
 
 :root {
   color-scheme: light;
   --bg: #ffffff;
   --panel: #ffffff;
   --panel-solid: #ffffff;
-  --ink: #111111;
-  --muted: #6b7280;
-  --line: #e5e7eb;
-  --green: #15803d;
-  --green-soft: #f0fdf4;
-  --blue: #111111;
+  --ink: #141414;
+  --ink-soft: #3f3f3f;
+  --muted: #737373;
+  --line: #e8e8e6;
+  --line-strong: #d4d4d0;
+  --stone: #f5f3ee;
+  --green: #166534;
+  --green-soft: #e9f4ec;
+  --gold: #8a6d1f;
+  --gold-line: #b08d2e;
+  --blue: #141414;
   --amber: #92400e;
-  --red: #dc2626;
-  --shadow: none;
+  --red: #b91c1c;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.05), 0 16px 40px -16px rgba(16, 24, 40, 0.14);
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
   --font-title: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --border-radius: 8px;
+  --border-radius: 10px;
 }
 
 * {
@@ -44,12 +51,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Layout shell: narrow, centred, plain white. */
+/* Layout shell: narrow, centred, plain white, generous air. */
 .app-shell {
   width: min(100%, 640px);
   min-height: 100vh;
   margin: 0 auto;
-  padding: calc(20px + env(safe-area-inset-top)) 20px calc(32px + env(safe-area-inset-bottom));
+  padding: calc(24px + env(safe-area-inset-top)) 20px calc(40px + env(safe-area-inset-bottom));
 }
 
 /* Header: title left, controls right, hairline underneath. */
@@ -58,8 +65,8 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding-bottom: 16px;
-  margin-bottom: 8px;
+  padding-bottom: 18px;
+  margin-bottom: 20px;
   border-bottom: 1px solid var(--line);
   flex-wrap: wrap;
 }
@@ -69,19 +76,19 @@ body {
 }
 .topbar h1 {
   font-family: var(--font-title);
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   font-weight: 700;
   margin: 0;
   letter-spacing: -0.02em;
 }
 
 .eyebrow {
-  margin: 0 0 2px 0;
+  margin: 0 0 4px 0;
   color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.68rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.14em;
 }
 
 .sync-status {
@@ -102,8 +109,8 @@ body {
   min-height: 44px;
   padding: 0 12px;
   background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--border-radius);
   color: var(--ink);
   font-weight: 600;
   font-size: 0.95rem;
@@ -114,8 +121,8 @@ body {
   border-color: var(--ink);
 }
 
-/* Buttons: plain rectangles. Primary is black, the rest are white
-   with a 1px grey border. */
+/* Buttons: solid black primary, white with a hairline border
+   secondary, slightly rounded corners. */
 button {
   border: none;
   background: none;
@@ -130,8 +137,8 @@ button {
   width: 44px;
   height: 44px;
   background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--border-radius);
   color: var(--ink);
 }
 .icon-button:hover {
@@ -150,20 +157,20 @@ button {
 .text-button {
   min-height: 44px;
   padding: 0 20px;
-  background: #111111;
-  border: 1px solid #111111;
+  background: #141414;
+  border: 1px solid #141414;
   color: #ffffff;
   font-weight: 600;
   font-size: 0.92rem;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
 }
 .text-button:hover {
   background: #000000;
 }
 .text-button:disabled {
   background: #ffffff;
-  border-color: #d1d5db;
-  color: #9ca3af;
+  border-color: var(--line-strong);
+  color: #a3a3a3;
   cursor: default;
 }
 
@@ -171,22 +178,25 @@ button {
   min-height: 44px;
   padding: 0 16px;
   background: #ffffff;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--line-strong);
   color: var(--ink);
   font-weight: 600;
   font-size: 0.9rem;
-  border-radius: 6px;
+  border-radius: var(--border-radius);
 }
 .quiet-button:hover {
   border-color: var(--ink);
 }
 
-/* Summary: one huge Remaining number, then three small plain
-   numbers, then a quiet footer line. No card, no ring, no colour. */
+/* Summary: the one refined card. Soft shadow, rounded corners,
+   a serif display figure for Remaining, small plain numbers below. */
 .hero-card {
-  padding: 24px 0 20px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--line);
+  padding: 28px 24px 24px;
+  margin-bottom: 20px;
+  background: #ffffff;
+  border: 1px solid #ececea;
+  border-radius: 20px;
+  box-shadow: var(--shadow-card);
 }
 .hero-left {
   display: flex;
@@ -197,17 +207,29 @@ button {
   display: flex;
   flex-direction: column;
 }
+.hero-remaining .section-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hero-remaining .section-kicker::before {
+  content: "";
+  width: 22px;
+  height: 2px;
+  background: var(--gold-line);
+}
 .hero-remaining strong {
   display: block;
-  font-family: var(--font-title);
-  font-size: clamp(3.25rem, 15vw, 4.5rem);
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: clamp(3.5rem, 16vw, 4.75rem);
+  font-weight: 600;
+  font-variation-settings: "opsz" 144;
   color: var(--ink);
-  line-height: 1.05;
-  letter-spacing: -0.03em;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
 }
 .hero-remaining .progress-line {
-  margin-top: 6px;
+  margin-top: 10px;
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--muted);
@@ -238,29 +260,31 @@ button {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
 }
 .hero-metric-item span {
   display: block;
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.68rem;
+  font-weight: 700;
   text-transform: uppercase;
   color: var(--muted);
-  letter-spacing: 0.06em;
-  margin-bottom: 4px;
+  letter-spacing: 0.1em;
+  margin-bottom: 5px;
 }
 .hero-metric-item strong {
   display: block;
   font-family: var(--font-title);
-  font-size: 1.35rem;
+  font-size: 1.4rem;
   font-weight: 700;
   color: var(--ink);
   letter-spacing: -0.01em;
 }
 
 .hero-foot {
-  margin-top: 16px;
-  padding-top: 12px;
+  margin-top: 18px;
+  padding-top: 14px;
   border-top: 1px solid var(--line);
   font-size: 0.85rem;
   font-weight: 500;
@@ -271,7 +295,7 @@ button {
   font-weight: 700;
 }
 
-/* Tabs: plain text with an underline for the active one. */
+/* Tabs: refined text tabs, slim black underline on the active one. */
 .tabs {
   display: flex;
   gap: 4px;
@@ -281,12 +305,13 @@ button {
 }
 .tab {
   min-height: 48px;
-  padding: 0 12px;
+  padding: 0 14px;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   color: var(--muted);
   font-weight: 600;
   font-size: 0.92rem;
+  letter-spacing: 0.01em;
   white-space: nowrap;
 }
 .tab:hover {
@@ -311,19 +336,19 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin: 20px 0 12px;
+  margin: 24px 0 12px;
 }
 .section-kicker {
   margin: 0 0 4px 0;
   color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.68rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.14em;
 }
 .section-head h2 {
   font-family: var(--font-title);
-  font-size: 1.3rem;
+  font-size: 1.35rem;
   font-weight: 700;
   margin: 0;
   letter-spacing: -0.01em;
@@ -337,8 +362,8 @@ button {
   min-height: 44px;
   padding: 0 12px;
   background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--border-radius);
   color: var(--ink);
   font-size: 0.85rem;
   font-weight: 600;
@@ -361,8 +386,8 @@ button {
   flex: 1;
 }
 
-/* Member list: plain rows separated by hairlines. Name left,
-   big amount right, Paid / Owes as plain text after the name. */
+/* Member list: premium rows — initials avatar, name left,
+   big amount right, hairline separators, generous spacing. */
 .member-list,
 .pending-list,
 .history-list {
@@ -375,10 +400,10 @@ button {
   border: none;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
-  padding: 16px 0;
+  padding: 20px 0;
 }
-.member-card:hover {
-  background: #ffffff;
+.member-card:active {
+  background: #fafaf9;
 }
 .member-card.is-paid {
   background: #ffffff;
@@ -421,6 +446,26 @@ button {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 3.5;
+}
+
+/* Initials avatar: warm stone circle, ink initials;
+   soft green when the member has paid. */
+.member-avatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--stone);
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.member-card.is-paid .member-avatar {
+  background: var(--green-soft);
+  color: var(--green);
 }
 
 .member-name {
@@ -471,8 +516,8 @@ button {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 10px;
-  margin-top: 16px;
-  padding-top: 14px;
+  margin-top: 18px;
+  padding-top: 16px;
   border-top: 1px solid var(--line);
 }
 .member-fields label,
@@ -484,10 +529,10 @@ button {
 .member-fields span,
 .notes-field span {
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   color: var(--muted);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
 }
 .member-fields input,
 .member-fields select,
@@ -496,10 +541,10 @@ button {
 textarea {
   width: 100%;
   min-height: 44px;
-  padding: 0 10px;
+  padding: 0 12px;
   background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--border-radius);
   color: var(--ink);
   font-weight: 500;
   font-size: 0.95rem;
@@ -565,8 +610,8 @@ textarea:focus {
   min-height: 44px;
   padding: 0 12px;
   background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--border-radius);
   color: var(--ink);
   font-weight: 600;
   outline: none;
@@ -585,15 +630,16 @@ textarea:focus {
 .history-summary article {
   background: #ffffff;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 12px;
+  padding: 14px;
 }
 .history-summary span {
   display: block;
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   color: var(--muted);
+  letter-spacing: 0.08em;
   margin-bottom: 4px;
 }
 .history-summary strong {
@@ -640,8 +686,9 @@ textarea:focus {
   display: block;
   font-size: 0.65rem;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.06em;
   margin-bottom: 2px;
 }
 .history-money strong {
@@ -656,7 +703,7 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 0;
+  padding: 20px 0;
   border-bottom: 1px solid var(--line);
 }
 .pending-row h3 {
@@ -683,7 +730,7 @@ textarea:focus {
   line-height: 1.5;
   background: #ffffff;
   padding: 14px;
-  border-radius: 8px;
+  border-radius: 12px;
   resize: none;
   min-height: 250px;
 }
@@ -716,8 +763,8 @@ textarea:focus {
   width: 100%;
   margin-bottom: 12px;
   background: #ffffff;
-  border: 1px dashed #d1d5db;
-  border-radius: 6px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--border-radius);
   padding: 10px;
   font-size: 0.85rem;
   color: var(--muted);
@@ -745,8 +792,8 @@ textarea:focus {
   justify-content: center;
   min-height: 44px;
   background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--border-radius);
   font-weight: 600;
   font-size: 0.9rem;
   cursor: pointer;
@@ -764,7 +811,7 @@ textarea:focus {
   justify-content: space-between;
   background: #ffffff;
   border: 1px solid var(--green);
-  border-radius: 6px;
+  border-radius: var(--border-radius);
   padding: 10px 14px;
   margin-bottom: 12px;
 }
@@ -828,10 +875,10 @@ textarea:focus {
   padding: 0 14px;
   font-size: 0.8rem;
   font-weight: 700;
-  background: #111111;
+  background: #141414;
   color: #ffffff;
-  border: 1px solid #111111;
-  border-radius: 6px;
+  border: 1px solid #141414;
+  border-radius: var(--border-radius);
 }
 
 /* Audit grid */
@@ -841,7 +888,7 @@ textarea:focus {
   gap: 10px;
   background: #ffffff;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 12px;
   margin-bottom: 16px;
 }
@@ -851,9 +898,10 @@ textarea:focus {
 .audit-grid span {
   display: block;
   font-size: 0.65rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   color: var(--muted);
+  letter-spacing: 0.06em;
   margin-bottom: 4px;
 }
 .audit-grid strong {
@@ -903,8 +951,8 @@ dialog::backdrop {
 .dialog-card {
   background: #ffffff;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 24px;
+  border-radius: 16px;
+  padding: 28px;
 }
 .dialog-card header {
   display: flex;
@@ -927,17 +975,18 @@ dialog::backdrop {
 }
 .dialog-card label span {
   font-size: 0.72rem;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   color: var(--muted);
+  letter-spacing: 0.08em;
 }
 .dialog-card select,
 .dialog-card input {
   min-height: 44px;
   padding: 0 12px;
   background: #ffffff;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--border-radius);
   color: var(--ink);
   font-weight: 600;
   outline: none;
@@ -970,7 +1019,7 @@ dialog::backdrop {
 .ledger-card {
   background: #ffffff;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
 }
 
@@ -1012,7 +1061,7 @@ dialog::backdrop {
   font-size: 0.72rem;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   margin-bottom: 2px;
 }
 
@@ -1052,7 +1101,7 @@ dialog::backdrop {
 
 .ledger-details-expand {
   border-top: 1px solid var(--line);
-  background: #f9fafb;
+  background: #faf9f7;
   padding: 16px;
 }
 
@@ -1113,28 +1162,28 @@ dialog::backdrop {
   color: var(--red);
 }
 
-/* Pressed states stay flat: a light grey fill, no glow. */
+/* Pressed states stay flat: a light warm-grey fill, no glow. */
 .icon-button:active,
 .quiet-button:active,
 .text-button:active,
 .file-button:active {
-  background: #f3f4f6;
+  background: #f5f4f2;
 }
 
 /* Agent provenance (Option A rebuild): plain text badges, no pills. */
 .muse-badge {
   display: inline-block;
   margin-top: 4px;
-  color: #4338ca;
+  color: var(--gold);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.01em;
 }
 .draft-badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 2px 10px;
   border: 1px solid #f59e0b;
-  border-radius: 6px;
+  border-radius: 999px;
   color: #92400e;
   font-size: 0.75rem;
   font-weight: 700;
@@ -1172,8 +1221,12 @@ dialog::backdrop {
   .topbar-right select {
     flex: 1;
   }
+  .hero-card {
+    padding: 24px 20px 20px;
+    border-radius: 18px;
+  }
   .hero-remaining strong {
-    font-size: 3.25rem;
+    font-size: 3.5rem;
   }
   .hero-metric-item strong {
     font-size: 1.15rem;
